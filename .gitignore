@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.env
+data/sim.sqlite
+data/sim.sqlite-journal
+data/dataset.json
+.cache/
+*.log

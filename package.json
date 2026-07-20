@@ -1,0 +1,39 @@
+{
+  "name": "delegate-score-sim",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Delegate Score Simulation Engine \u2014 collect, recompute and calibrate the three-pillar SSV Delegate Score",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "collect": "tsx collector/build-dataset.ts",
+    "collect:balances": "tsx collector/collect-balances.ts",
+    "collect:votes": "tsx collector/collect-votes.ts",
+    "seed:demo": "tsx collector/seed-demo.ts",
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "doctor": "tsx collector/doctor.ts"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.7.0",
+    "dotenv": "^16.4.7",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "recharts": "^2.15.0",
+    "viem": "^2.21.58"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^22.10.5",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@vitejs/plugin-react": "^4.3.4",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3",
+    "vite": "^6.0.7",
+    "vitest": "^2.1.8"
+  }
+}
