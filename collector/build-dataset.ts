@@ -9,7 +9,6 @@ import {
   BACKFILL_DAYS,
   DATASET_PATH,
   DELEGATES_CSV,
-  HIGHSIGNAL_SOURCE,
   SNAPSHOT_SPACE,
   SQLITE_PATH,
   requireArchiveRpcUrl,
@@ -69,7 +68,7 @@ async function main(): Promise<void> {
     log('collect', 'skipping highsignal (--skip-highsignal)');
   } else {
     const provider = makeHighSignalProvider();
-    log('collect', `highsignal provider: ${provider.name} (HIGHSIGNAL_SOURCE=${HIGHSIGNAL_SOURCE})`);
+    log('collect', `highsignal provider: ${provider.name}`);
     const rows = await provider.fetchScores(
       delegates.map((d) => d.address),
       todayUtc(),

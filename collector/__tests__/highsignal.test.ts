@@ -8,8 +8,6 @@
  */
 import { describe, expect, it } from 'vitest';
 import { addressesOf, type HighSignalUser } from '../highsignal/types.js';
-import { CsvHighSignalProvider } from '../highsignal/csv.js';
-import { HIGHSIGNAL_CSV } from '../../config.js';
 
 const TARGET = '0x2de670a1D8c1DE83D8727295284704bB196bA117';
 
@@ -50,24 +48,5 @@ describe('address extraction', () => {
   it('ignores malformed entries rather than throwing', () => {
     const messy = { ...realRecord, ethereumAddresses: ['', null as unknown as string, TARGET] };
     expect(addressesOf(messy)).toEqual([TARGET.toLowerCase()]);
-  });
-});
-
-describe('CSV provider still works offline', () => {
-  it('reads dated rows from data/highsignal.csv', async () => {
-    const provider = new CsvHighSignalProvider(HIGHSIGNAL_CSV);
-    const rows = await provider.fetchScores(
-      ['0x1111111111111111111111111111111111111111'],
-      '2026-07-20',
-    );
-    expect(rows.length).toBeGreaterThan(0);
-    expect(rows.every((r) => r.address === '0x1111111111111111111111111111111111111111')).toBe(true);
-    expect(rows.every((r) => Number.isFinite(r.score))).toBe(true);
-  });
-
-  it('omits delegates with no CSV entry — community stays null, not zero', async () => {
-    const provider = new CsvHighSignalProvider(HIGHSIGNAL_CSV);
-    const rows = await provider.fetchScores(['0x9999999999999999999999999999999999999999'], '2026-07-20');
-    expect(rows).toEqual([]);
   });
 });

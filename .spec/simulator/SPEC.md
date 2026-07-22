@@ -303,9 +303,7 @@ with no match gets a `null` community pillar, resolved by §4.5.
 > **Coverage is the binding constraint.** Only delegates who explicitly shared an address can be
 > matched — currently 1 of 50 on the live roster. See §8.
 
-Behind a `HighSignalProvider` interface: `HttpHighSignalProvider` (default) and
-`CsvHighSignalProvider` reading `data/highsignal.csv` (`address,date,score[,username,rank]`) for
-offline runs and manual backfill.
+Behind a `HighSignalProvider` interface: `HttpHighSignalProvider` queries the live HighSignal API.
 
 ### 5.4 Data model (SQLite)
 
@@ -357,13 +355,13 @@ delegate-score-sim/
   collector/
     collect-balances.ts     # archive-RPC historical balances
     collect-votes.ts        # Snapshot GraphQL vote history
-    highsignal/             # HighSignalProvider + HTTP + CSV adapters
+    highsignal/             # HighSignalProvider + HTTP adapter
     build-dataset.ts        # writes data/sim.sqlite + data/dataset.json
     doctor.ts               # archive-RPC / coverage diagnostics
     seed-demo.ts            # synthetic dataset for offline UI runs
   ui/                       # Vite + React app (§6)
   data/                     # delegates.csv (INPUT, externally generated)
-                            # sim.sqlite, dataset.json, highsignal.csv (generated)
+                            # sim.sqlite, dataset.json (generated)
   README.md
 ```
 
@@ -383,7 +381,7 @@ delegate-score-sim/
    case (TWAB 1M → holdings 100). ✅ 98 tests
 2. `npm run collect` produces `data/dataset.json` with balances, votes and HighSignal series for
    every delegate in `delegates.csv` (HighSignal via the paginated `/api/users` endpoint, matched by
-   address; CSV adapter works offline). ✅
+   address). ✅
 3. `npm run dev` opens a page where moving any slider updates the leaderboard and charts with no
    reload, and the as-of scrubber changes scores using only data up to that date. ✅
 4. Exported preset JSON round-trips (import reproduces the same scores). ✅

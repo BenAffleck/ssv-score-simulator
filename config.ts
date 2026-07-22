@@ -34,14 +34,12 @@ export const CSSV_ADDRESS = process.env.CSSV_ADDRESS ?? '0xe018D31F120A637828F46
 export const CSSV_DEPLOY_BLOCK = 24_719_189n;
 
 export const BACKFILL_DAYS = Number(process.env.BACKFILL_DAYS ?? 240);
-export const HIGHSIGNAL_SOURCE = (process.env.HIGHSIGNAL_SOURCE ?? 'http') as 'http' | 'csv';
 
 // Paths
 export const DATA_DIR = new URL('./data/', import.meta.url).pathname;
 export const SQLITE_PATH = `${DATA_DIR}sim.sqlite`;
 export const DATASET_PATH = `${DATA_DIR}dataset.json`;
 export const DELEGATES_CSV = `${DATA_DIR}delegates.csv`;
-export const HIGHSIGNAL_CSV = `${DATA_DIR}highsignal.csv`;
 
 // ---------------------------------------------------------------------------
 // Required config — fail fast, name the field (SPEC §9).
@@ -78,8 +76,7 @@ export function requireHighSignalApiKey(): string {
   if (!key) {
     throw new ConfigError(
       'HIGHSIGNAL_API_KEY',
-      'Required to authenticate against https://app.highsignal.xyz/api/users. ' +
-        'For an offline run set HIGHSIGNAL_SOURCE=csv and provide data/highsignal.csv instead.',
+      'Required to authenticate against https://app.highsignal.xyz/api/users.',
     );
   }
   return key;

@@ -40,7 +40,6 @@ No key handy? You can still run everything:
 
 ```bash
 npm run seed:demo   # synthetic dataset → the UI runs with no credentials
-HIGHSIGNAL_SOURCE=csv npm run collect -- --skip-balances   # offline CSV community scores
 ```
 
 ---
@@ -106,9 +105,9 @@ collector (tsx) ──writes──▶ data/sim.sqlite + dataset.json ──read�
 |---|---|
 | `config.ts` | Derived config (addresses, endpoints) + fail-fast required-config checks. |
 | `scoring-core/` | **The only place the math lives.** Pure, I/O-free, unit-tested. Imported by both sides. |
-| `collector/` | `tsx` scripts: archive-RPC balances, Snapshot GraphQL votes, HighSignal providers. |
+| `collector/` | `tsx` scripts: archive-RPC balances, Snapshot GraphQL votes, HighSignal provider. |
 | `ui/` | Vite + React SPA. Loads `dataset.json` (bundled or imported), recomputes everything in-browser. |
-| `data/` | `delegates.csv` (**input**, externally generated); `highsignal.csv`, `sim.sqlite`, `dataset.json` (generated). |
+| `data/` | `delegates.csv` (**input**, externally generated); `sim.sqlite`, `dataset.json` (generated). |
 
 The UI never re-implements a formula — it calls `simulate()` from `scoring-core`, exactly as the
 tests do. That is what makes a preset exported from the UI trustworthy as a config for the real
@@ -222,8 +221,7 @@ delegate to the user whose addresses contain that delegate's address.
 daily observations on the same 0–100 scale as `score` (the newest entry equals `score`). The
 collector ingests that whole series, so the community pillar has real history from the very first
 run rather than only accruing forward. Today's row is written last, from the authoritative `score`
-field. The offline adapter (`HIGHSIGNAL_SOURCE=csv`, `data/highsignal.csv` with
-`address,date,score[,username,rank]`) remains available for manual backfill.
+field.
 
 **Coverage is limited by what users share.** Only delegates who explicitly shared an Ethereum
 address with the project can be matched. On the current roster that is 1 of 50 — the other 49 get a
@@ -286,7 +284,7 @@ displayed as a real 0.
 | # | Criterion | Status |
 |---|---|---|
 | 1 | `npm run test` reproduces the worked example (community 82, TWAB 2500 → 50, 4-of-5 → ≈88, **DelegateScore ≈ 80**) and the whale case (TWAB 1M → 100) | ✅ 65 tests |
-| 2 | `npm run collect` writes `dataset.json` with balances + votes + HighSignal per delegate; CSV adapter works offline | ✅ |
+| 2 | `npm run collect` writes `dataset.json` with balances + votes + HighSignal per delegate | ✅ |
 | 3 | `npm run dev` — any slider updates leaderboard + charts with no reload; the scrubber recomputes using only data up to that date | ✅ |
 | 4 | Parameter presets export/import as JSON and round-trip to identical scores | ✅ |
 | 5 | `p = 1.0` makes holdings linear; raising `H` flattens recency — both visibly | ✅ |
@@ -303,8 +301,8 @@ by the same amount scales numerator and denominator alike and leaves the ratio u
 
 ## Notes
 
-- `data/dataset.json`, `data/sim.sqlite` and `.env` are git-ignored; `delegates.csv` and
-  `highsignal.csv` are committed as samples. A dataset is shared as a file rather than committed —
+- `data/dataset.json`, `data/sim.sqlite` and `.env` are git-ignored; `delegates.csv` is
+  committed as a sample. A dataset is shared as a file rather than committed —
   see [Sharing a dataset](#sharing-a-dataset).
 - External calls retry with exponential backoff; block-number-per-date is cached in SQLite, so a
   re-run does not re-resolve blocks.

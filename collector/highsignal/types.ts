@@ -44,9 +44,8 @@ export interface HighSignalPage {
 }
 
 /**
- * Source of the Community pillar. Two implementations ship:
- *   - HttpHighSignalProvider (default) — the live paginated API
- *   - CsvHighSignalProvider — data/highsignal.csv, for offline runs/backfill
+ * Source of the Community pillar, backed by HttpHighSignalProvider —
+ * the live paginated HighSignal API.
  */
 export interface HighSignalProvider {
   readonly name: string;
