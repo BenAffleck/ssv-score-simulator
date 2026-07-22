@@ -7,3 +7,4 @@ export * from './votes.js';
 export * from './composite.js';
 export * from './params.js';
 export * from './simulate.js';
+export * from './dataset-io.js';

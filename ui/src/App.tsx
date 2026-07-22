@@ -9,34 +9,46 @@ import {
   type LeaderboardRow,
   type ScoringParams,
 } from '../../scoring-core/index.js';
+import { DatasetBadge, DatasetGate } from './components/DatasetImport.js';
 import { Leaderboard } from './components/Leaderboard.js';
 import { ParamPanel } from './components/ParamPanel.js';
 import { PillarChart, ScoreChart } from './components/Charts.js';
 import { colorFor, fmtScore } from './theme.js';
-import { useDataset } from './useDataset.js';
+import { useDataset, type DatasetSource } from './useDataset.js';
 
 /** Keep the time-series charts to ~90 points regardless of range length. */
 const MAX_POINTS = 90;
 
 export function App() {
-  const state = useDataset();
+  const { state, importFile, reset } = useDataset();
 
   if (state.status === 'loading') return <div className="loading">Loading dataset…</div>;
-  if (state.status === 'error') {
-    return (
-      <div className="error">
-        <div>
-          <strong>Could not load data/dataset.json</strong>
-          <code>{state.message}</code>
-          <code>Run `npm run collect` (live) or `npm run seed:demo` (offline sample), then reload.</code>
-        </div>
-      </div>
-    );
-  }
-  return <Simulator dataset={state.dataset} />;
+  if (state.status === 'empty') return <DatasetGate importFile={importFile} notice={state.notice} />;
+
+  return (
+    <Simulator
+      // Remount on a dataset swap: the scrubber position and selected delegate
+      // are indices into the OLD dataset and mean nothing in the new one.
+      key={`${state.source.kind}:${state.dataset.generatedAt}`}
+      dataset={state.dataset}
+      source={state.source}
+      importFile={importFile}
+      onReset={() => void reset()}
+    />
+  );
 }
 
-function Simulator({ dataset }: { dataset: import('../../scoring-core/index.js').Dataset }) {
+function Simulator({
+  dataset,
+  source,
+  importFile,
+  onReset,
+}: {
+  dataset: import('../../scoring-core/index.js').Dataset;
+  source: DatasetSource;
+  importFile: (file: File) => Promise<void>;
+  onReset: () => void;
+}) {
   const [params, setParams] = useState<ScoringParams>(() => clonePolicy(DEFAULT_PARAMS));
   const [selected, setSelected] = useState<string | null>(null);
 
@@ -124,6 +136,12 @@ function Simulator({ dataset }: { dataset: import('../../scoring-core/index.js')
         <span style={{ marginLeft: 'auto' }} className="sub">
           collected {dataset.generatedAt.slice(0, 10)}
         </span>
+        <DatasetBadge
+          dataset={dataset}
+          source={source}
+          importFile={importFile}
+          onReset={onReset}
+        />
       </header>
 
       <aside className="sidebar">

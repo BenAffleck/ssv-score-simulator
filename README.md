@@ -71,6 +71,29 @@ Re-runs are idempotent — already-collected days are skipped, so it is cheap to
 
 ---
 
+## Sharing a dataset
+
+Collecting needs an archive RPC and a HighSignal key; *reading* the result needs neither. So one
+person collects and everyone else works from the file.
+
+**To share:** send them your `data/dataset.json`. It is the whole input — the simulator recomputes
+every score in the browser from it.
+
+**To use one:** open the simulator and drop the file on it. A deploy with no dataset opens on an
+import screen instead of failing; where a dataset is already loaded, the control in the top-right
+swaps it. The file is held in IndexedDB on that device, so it survives a reload until cleared — it
+is never uploaded anywhere.
+
+Imports are validated by `parseDataset` before anything is stored, so a truncated download or the
+wrong JSON file is rejected by name rather than becoming a plausible-looking leaderboard.
+
+**Deploying:** `npm run build` bundles `data/dataset.json` into `dist/` if it exists at build time,
+and succeeds without it. So `dist/` is either self-contained for peers, or a shell that asks for a
+dataset — deploy it to any static host either way. Nothing else in `data/` is ever bundled;
+`sim.sqlite` and the roster CSVs stay local.
+
+---
+
 ## Architecture
 
 ```
@@ -84,7 +107,7 @@ collector (tsx) ──writes──▶ data/sim.sqlite + dataset.json ──read�
 | `config.ts` | Derived config (addresses, endpoints) + fail-fast required-config checks. |
 | `scoring-core/` | **The only place the math lives.** Pure, I/O-free, unit-tested. Imported by both sides. |
 | `collector/` | `tsx` scripts: archive-RPC balances, Snapshot GraphQL votes, HighSignal providers. |
-| `ui/` | Vite + React SPA. Loads `dataset.json`, recomputes everything in-browser. |
+| `ui/` | Vite + React SPA. Loads `dataset.json` (bundled or imported), recomputes everything in-browser. |
 | `data/` | `delegates.csv` (**input**, externally generated); `highsignal.csv`, `sim.sqlite`, `dataset.json` (generated). |
 
 The UI never re-implements a formula — it calls `simulate()` from `scoring-core`, exactly as the
@@ -281,7 +304,8 @@ by the same amount scales numerator and denominator alike and leaves the ratio u
 ## Notes
 
 - `data/dataset.json`, `data/sim.sqlite` and `.env` are git-ignored; `delegates.csv` and
-  `highsignal.csv` are committed as samples.
+  `highsignal.csv` are committed as samples. A dataset is shared as a file rather than committed —
+  see [Sharing a dataset](#sharing-a-dataset).
 - External calls retry with exponential backoff; block-number-per-date is cached in SQLite, so a
   re-run does not re-resolve blocks.
 - Out of scope, per the spec: writing scores on-chain, auth, multi-user state.
