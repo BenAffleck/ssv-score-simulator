@@ -63,7 +63,7 @@ export function IdentityCard({ row, identity, rosterAddresses }: Props) {
         <div className="hint">
           {row.raw.hsUsername
             ? 'No additional HighSignal-linked addresses published.'
-            : 'No HighSignal handle — only the roster address is known.'}
+            : 'No HighSignal handle in the SSV Community — only the roster address is known.'}
         </div>
       )}
     </div>
