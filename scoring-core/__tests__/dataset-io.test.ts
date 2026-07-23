@@ -25,6 +25,8 @@ const valid: Dataset = {
   highsignal: [
     { address: '0xaaa', date: '2026-07-01', score: 82, hsUsername: 'alice', hsRank: 3 },
   ],
+  ethCommunities: [{ address: '0xccc', project: 'other', hsUsername: 'carol' }],
+  identities: [{ address: '0xaaa', hsUsername: 'alice', linkedAddresses: ['0xa11', '0xa12'] }],
 };
 
 const clone = (): any => JSON.parse(JSON.stringify(valid));
@@ -51,8 +53,31 @@ describe('parseDataset — round trip', () => {
     const d = clone();
     delete d.highsignal;
     delete d.votes;
+    delete d.ethCommunities;
+    delete d.identities;
     expect(parseDataset(d).highsignal).toEqual([]);
     expect(parseDataset(d).votes).toEqual([]);
+    expect(parseDataset(d).ethCommunities).toEqual([]);
+    expect(parseDataset(d).identities).toEqual([]);
+  });
+
+  it('parses identity rows (linked eth addresses per delegate)', () => {
+    const d = clone();
+    d.identities = [{ address: '0xAAA', hsUsername: 'alice', linkedAddresses: ['0xB', '0xC'] }];
+    const parsed = parseDataset(d).identities!;
+    expect(parsed).toEqual([{ address: '0xAAA', hsUsername: 'alice', linkedAddresses: ['0xB', '0xC'] }]);
+  });
+
+  it('parses ethCommunities rows when present (delegation impact cohort)', () => {
+    const d = clone();
+    d.ethCommunities = [
+      { address: '0xDDD', project: 'foo', hsUsername: 'dave' },
+      { address: '0xeee', project: 'bar' }, // hsUsername omitted → null
+    ];
+    const parsed = parseDataset(d).ethCommunities!;
+    expect(parsed).toHaveLength(2);
+    expect(parsed[0]).toEqual({ address: '0xDDD', project: 'foo', hsUsername: 'dave' });
+    expect(parsed[1]!.hsUsername).toBeNull();
   });
 });
 

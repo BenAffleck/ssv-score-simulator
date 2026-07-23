@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "name": "ssv-default-delegation",
+  "exportedAt": "2026-07-22T00:00:00.000Z",
+  "delegation": {
+    "totalDelegatable": 200000,
+    "ssvCommunity": { "pct": 30, "scoreThreshold": 25 },
+    "verifiedOperators": { "pct": 20, "minMembers": 5 },
+    "professional": { "pct": 20, "minMembers": 1 },
+    "grantRecipients": { "pct": 20, "minMembers": 5 },
+    "ethCommunities": { "pct": 10 },
+    "assignments": {
+      "0xf2659cc196829c6676b1e0e1a71a8797cec6778a": "verifiedOperators",
+      "0x26b0bb09478a8423b53b2854deffb8a61a889725": "verifiedOperators",
+      "0x8a955ed24fcb3cf71d8a5bc828b7dcfdb2c17101": "verifiedOperators",
+      "0x13be45d9ade672c0354a5bff501dc5f791002680": "verifiedOperators",
+      "0xd1e4163b09c77c39b66119cd3b1d79d8c699ae44": "verifiedOperators",
+      "0xe3023dae714d827f2452442fccfdc2bcd684de13": "grantRecipients",
+      "0x833982274afc3909f0fff48e92546ec21ae5ad6b": "grantRecipients",
+      "0xa32d07ad5c398599636867439a4bcaef119351ab": "grantRecipients",
+      "0x60cd284adc16f5858c23b26c8377c13f72c49e35": "grantRecipients",
+      "0xfa08c782a435f713cb0fd6d5836b7525b36372f0": "grantRecipients",
+      "0x58b1b454dbe5156acc8fc2139e7238451b59f432": "professional"
+    }
+  }
+}

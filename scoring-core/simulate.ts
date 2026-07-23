@@ -39,9 +39,60 @@ export interface DatasetIndex {
   balanceCoverage: { start: string; end: string } | null;
   voted: Map<string, Set<string>>;
   highsignal: Map<string, HighSignalRow[]>;
+  /**
+   * Non-canonical addresses of linked identities. A person may hold several eth
+   * addresses (published on HighSignal); the first one that appears in the
+   * roster is the canonical delegate and the rest are aliases, excluded from the
+   * leaderboard so an identity is represented — and delegated to — exactly once.
+   */
+  aliases: Set<string>;
 }
 
 const key = (a: string): string => a.toLowerCase();
+
+/** Union-find over the addresses HighSignal reports as one identity. */
+function resolveAliases(dataset: Dataset): Set<string> {
+  const identities = dataset.identities ?? [];
+  if (identities.length === 0) return new Set();
+
+  const parent = new Map<string, string>();
+  const add = (x: string) => {
+    if (!parent.has(x)) parent.set(x, x);
+  };
+  const find = (x: string): string => {
+    let r = x;
+    while (parent.get(r) !== r) r = parent.get(r)!;
+    let c = x;
+    while (parent.get(c) !== r) {
+      const next = parent.get(c)!;
+      parent.set(c, r);
+      c = next;
+    }
+    return r;
+  };
+  const union = (a: string, b: string) => {
+    add(a);
+    add(b);
+    parent.set(find(a), find(b));
+  };
+
+  for (const id of identities) {
+    add(key(id.address));
+    for (const linked of id.linkedAddresses) union(key(id.address), key(linked));
+  }
+
+  // Canonical = the first delegate (in roster order) of each linked group.
+  const canonicalByRoot = new Map<string, string>();
+  const aliases = new Set<string>();
+  for (const d of dataset.delegates) {
+    const a = key(d.address);
+    if (!parent.has(a)) continue;
+    const root = find(a);
+    if (canonicalByRoot.has(root)) aliases.add(a);
+    else canonicalByRoot.set(root, a);
+  }
+  return aliases;
+}
 
 /** Build the lookup index once; reuse it across every parameter change. */
 export function indexDataset(dataset: Dataset): DatasetIndex {
@@ -91,6 +142,7 @@ export function indexDataset(dataset: Dataset): DatasetIndex {
     balanceCoverage,
     voted,
     highsignal,
+    aliases: resolveAliases(dataset),
   };
 }
 
@@ -119,7 +171,11 @@ function communityAsOf(index: DatasetIndex, address: string, asOf: string): High
 }
 
 export function simulate(index: DatasetIndex, params: ScoringParams, asOf: string): LeaderboardRow[] {
-  const delegates = index.dataset.delegates;
+  // Aliases (non-canonical addresses of a linked identity) never become rows,
+  // so a person appears — and is delegated to — exactly once.
+  const delegates = index.aliases.size
+    ? index.dataset.delegates.filter((d) => !index.aliases.has(key(d.address)))
+    : index.dataset.delegates;
 
   // Pass 1 — raw community values, needed up front for min–max normalization.
   const rawCommunity = new Map<string, HighSignalRow | null>();

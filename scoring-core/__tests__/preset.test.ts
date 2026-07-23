@@ -1,6 +1,16 @@
 /** Acceptance §4 — exported preset JSON round-trips to identical scores. */
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_PARAMS, exportPreset, parsePreset } from '../params.js';
+import {
+  DELEGATION_PRESET_VERSION,
+  DEFAULT_DELEGATION,
+  DEFAULT_PARAMS,
+  exportDelegationPreset,
+  exportPreset,
+  parseDelegation,
+  parseDelegationPreset,
+  parsePreset,
+} from '../params.js';
+import type { DelegationConfig } from '../delegation.js';
 import { indexDataset, simulate } from '../simulate.js';
 import type { ScoringParams } from '../types.js';
 import { AS_OF, workedExampleDataset } from './fixtures.js';
@@ -51,5 +61,44 @@ describe('preset round-trip', () => {
     const a = simulate(index, DEFAULT_PARAMS, AS_OF);
     const b = simulate(index, TWEAKED, AS_OF);
     expect(b).not.toEqual(a);
+  });
+});
+
+describe('delegation preset — separate from the scoring preset', () => {
+  const DELEGATION: DelegationConfig = {
+    totalDelegatable: 250_000,
+    ssvCommunity: { pct: 35, scoreThreshold: 30 },
+    verifiedOperators: { pct: 15, minMembers: 7 },
+    professional: { pct: 20, minMembers: 2 },
+    grantRecipients: { pct: 20, minMembers: 6 },
+    ethCommunities: { pct: 10 },
+    assignments: { '0xaaa': 'verifiedOperators', '0xbbb': 'grantRecipients' },
+  };
+
+  it('the scoring preset never carries delegation (they are not mixed)', () => {
+    expect(Object.keys(exportPreset(DEFAULT_PARAMS, 'x'))).not.toContain('delegation');
+  });
+
+  it('stamps its own version and round-trips the config exactly', () => {
+    const preset = exportDelegationPreset(DELEGATION, 'x');
+    expect(preset.version).toBe(DELEGATION_PRESET_VERSION);
+    const json = JSON.stringify(preset);
+    expect(parseDelegationPreset(JSON.parse(json))).toEqual(DELEGATION);
+  });
+
+  it('accepts a bare delegation config as well as a wrapped preset', () => {
+    expect(parseDelegationPreset(JSON.parse(JSON.stringify(DELEGATION)))).toEqual(DELEGATION);
+  });
+
+  it('falls back to defaults for missing or malformed input', () => {
+    expect(parseDelegationPreset({})).toEqual(DEFAULT_DELEGATION);
+    expect(parseDelegationPreset(null)).toEqual(DEFAULT_DELEGATION);
+  });
+
+  it('keeps any of the five cohorts and drops unknown strings from assignments', () => {
+    const parsed = parseDelegation({
+      assignments: { '0xAAA': 'ethCommunities', '0xbbb': 'professional', '0xccc': 'bogusCohort' },
+    });
+    expect(parsed.assignments).toEqual({ '0xaaa': 'ethCommunities', '0xbbb': 'professional' });
   });
 });

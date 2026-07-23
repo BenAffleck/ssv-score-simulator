@@ -2,6 +2,7 @@
  * Default parameters (the proposal's ratified values) and preset
  * serialisation. Pure — imported by both the UI and the collector.
  */
+import { COHORT_KEYS, type CohortKey, type DelegationConfig } from './delegation.js';
 import type { CommunityMode, HoldingsMode, ScoringParams } from './types.js';
 
 /** The proposal defaults: w={3,3,10}, HOLD_REF=10000, p=0.5, T=180, H=90, N=5. */
@@ -15,6 +16,17 @@ export const DEFAULT_PARAMS: ScoringParams = {
   missingPolicy: 'zero',
 };
 
+/** Cohort split ratified with the DAO: 30/20/20/20/10, sums to 100%. */
+export const DEFAULT_DELEGATION: DelegationConfig = {
+  totalDelegatable: 200_000,
+  ssvCommunity: { pct: 30, scoreThreshold: 25 },
+  verifiedOperators: { pct: 20, minMembers: 5 },
+  professional: { pct: 20, minMembers: 1 },
+  grantRecipients: { pct: 20, minMembers: 5 },
+  ethCommunities: { pct: 10 },
+  assignments: {},
+};
+
 export const PRESET_VERSION = 1;
 
 export interface Preset {
@@ -22,6 +34,16 @@ export interface Preset {
   name: string;
   exportedAt: string;
   params: ScoringParams;
+}
+
+/** Delegation impact analysis exports separately — never mixed with a scoring preset. */
+export const DELEGATION_PRESET_VERSION = 1;
+
+export interface DelegationPreset {
+  version: number;
+  name: string;
+  exportedAt: string;
+  delegation: DelegationConfig;
 }
 
 export function clonePolicy(p: ScoringParams): ScoringParams {
@@ -34,12 +56,33 @@ export function clonePolicy(p: ScoringParams): ScoringParams {
   };
 }
 
+export function cloneDelegation(d: DelegationConfig): DelegationConfig {
+  return {
+    totalDelegatable: d.totalDelegatable,
+    ssvCommunity: { ...d.ssvCommunity },
+    verifiedOperators: { ...d.verifiedOperators },
+    professional: { ...d.professional },
+    grantRecipients: { ...d.grantRecipients },
+    ethCommunities: { ...d.ethCommunities },
+    assignments: { ...d.assignments },
+  };
+}
+
 export function exportPreset(params: ScoringParams, name = 'custom'): Preset {
   return {
     version: PRESET_VERSION,
     name,
     exportedAt: new Date().toISOString(),
     params: clonePolicy(params),
+  };
+}
+
+export function exportDelegationPreset(delegation: DelegationConfig, name = 'custom'): DelegationPreset {
+  return {
+    version: DELEGATION_PRESET_VERSION,
+    name,
+    exportedAt: new Date().toISOString(),
+    delegation: cloneDelegation(delegation),
   };
 }
 
@@ -80,6 +123,62 @@ export function parsePreset(input: unknown): ScoringParams {
     },
     missingPolicy: raw.missingPolicy === 'exclude' ? 'exclude' : d.missingPolicy,
   };
+}
+
+/**
+ * Parse a delegation config back into a full object. Tolerant like
+ * `parsePreset`: missing keys fall back to DEFAULT_DELEGATION, numbers are
+ * clamped to sane minimums, and only recognised cohort strings survive in
+ * `assignments`. A v1 preset (no `delegation`) simply yields the defaults.
+ */
+export function parseDelegation(input: unknown): DelegationConfig {
+  const raw = asRecord(input);
+  const d = DEFAULT_DELEGATION;
+  const ssv = asRecord(raw.ssvCommunity);
+  const vops = asRecord(raw.verifiedOperators);
+  const prof = asRecord(raw.professional);
+  const grant = asRecord(raw.grantRecipients);
+  const eth = asRecord(raw.ethCommunities);
+
+  const assignments: Record<string, CohortKey> = {};
+  const rawAssign = asRecord(raw.assignments);
+  const allowed = new Set<string>(COHORT_KEYS);
+  for (const [addr, cohort] of Object.entries(rawAssign)) {
+    if (typeof cohort === 'string' && allowed.has(cohort)) {
+      assignments[addr.toLowerCase()] = cohort as CohortKey;
+    }
+  }
+
+  return {
+    totalDelegatable: num(raw.totalDelegatable, d.totalDelegatable, 0),
+    ssvCommunity: {
+      pct: num(ssv.pct, d.ssvCommunity.pct, 0),
+      scoreThreshold: num(ssv.scoreThreshold, d.ssvCommunity.scoreThreshold, 0),
+    },
+    verifiedOperators: {
+      pct: num(vops.pct, d.verifiedOperators.pct, 0),
+      minMembers: num(vops.minMembers, d.verifiedOperators.minMembers, 0),
+    },
+    professional: {
+      pct: num(prof.pct, d.professional.pct, 0),
+      minMembers: num(prof.minMembers, d.professional.minMembers, 0),
+    },
+    grantRecipients: {
+      pct: num(grant.pct, d.grantRecipients.pct, 0),
+      minMembers: num(grant.minMembers, d.grantRecipients.minMembers, 0),
+    },
+    ethCommunities: { pct: num(eth.pct, d.ethCommunities.pct, 0) },
+    assignments,
+  };
+}
+
+/**
+ * Parse a delegation preset (or a bare delegation config) back into a config.
+ * Mirrors `parsePreset` for scoring: tolerant, round-trip-exact.
+ */
+export function parseDelegationPreset(input: unknown): DelegationConfig {
+  const root = asRecord(input);
+  return parseDelegation(root.delegation ?? root);
 }
 
 function asRecord(v: unknown): Record<string, unknown> {

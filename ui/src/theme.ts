@@ -24,6 +24,15 @@ export const PILLAR_LABELS = {
   votes: 'Votes',
 } as const;
 
+/** One colour per delegation cohort, reused by the grid badges and breakdown. */
+export const COHORT_COLORS = {
+  ssvCommunity: '#5aa9f7',
+  verifiedOperators: '#3fcf8e',
+  professional: '#a78bfa',
+  grantRecipients: '#f5c451',
+  ethCommunities: '#f07a9c',
+} as const;
+
 export function colorFor(index: number): string {
   return SERIES_COLORS[index % SERIES_COLORS.length]!;
 }

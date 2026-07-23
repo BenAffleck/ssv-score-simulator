@@ -88,6 +88,34 @@ export interface HighSignalRow {
   hsRank: number | null;
 }
 
+/**
+ * A published Ethereum address of a high-signal user from *another* HighSignal
+ * project, used to populate the Ethereum Communities delegation cohort. These
+ * are external to the SSV roster — collected by the collector, never scored.
+ */
+export interface EthCommunityRow {
+  /** Published eth address (lowercased). */
+  address: string;
+  /** Source HighSignal project slug. */
+  project: string;
+  hsUsername: string | null;
+}
+
+/**
+ * The Ethereum addresses linked to one delegate identity. The primary address
+ * (the CSV/join key) always lives on `DelegateRow.address`; this records the
+ * *extra* addresses the same HighSignal user published, so a handle's full
+ * on-chain footprint is observable. Empty entries are not emitted.
+ */
+export interface IdentityRow {
+  /** Primary delegate (join) address, lowercased. */
+  address: string;
+  /** The HighSignal username handle, if the identity has one. */
+  hsUsername: string | null;
+  /** Extra eth addresses published on HighSignal, excluding the primary. Deduped, lowercased. */
+  linkedAddresses: string[];
+}
+
 export interface Dataset {
   generatedAt: string;
   space: string;
@@ -97,6 +125,10 @@ export interface Dataset {
   proposals: ProposalRow[];
   votes: VoteRow[];
   highsignal: HighSignalRow[];
+  /** Absent on datasets built before delegation impact analysis — treat as []. */
+  ethCommunities?: EthCommunityRow[];
+  /** Extra linked eth addresses per delegate (HighSignal). Absent on older datasets. */
+  identities?: IdentityRow[];
 }
 
 // --- Results ---------------------------------------------------------------

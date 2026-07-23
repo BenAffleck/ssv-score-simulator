@@ -5,6 +5,7 @@ export * from './community.js';
 export * from './holdings.js';
 export * from './votes.js';
 export * from './composite.js';
+export * from './delegation.js';
 export * from './params.js';
 export * from './simulate.js';
 export * from './dataset-io.js';

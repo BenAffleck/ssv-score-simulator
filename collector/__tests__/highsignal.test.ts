@@ -7,7 +7,12 @@
  * fails silently, so it is locked down here.
  */
 import { describe, expect, it } from 'vitest';
-import { addressesOf, type HighSignalUser } from '../highsignal/types.js';
+import {
+  addressesOf,
+  parseSignalTier,
+  signalMeetsThreshold,
+  type HighSignalUser,
+} from '../highsignal/types.js';
 
 const TARGET = '0x2de670a1D8c1DE83D8727295284704bB196bA117';
 
@@ -48,5 +53,36 @@ describe('address extraction', () => {
   it('ignores malformed entries rather than throwing', () => {
     const messy = { ...realRecord, ethereumAddresses: ['', null as unknown as string, TARGET] };
     expect(addressesOf(messy)).toEqual([TARGET.toLowerCase()]);
+  });
+});
+
+describe('signal tier', () => {
+  it('parses known tiers, tolerating casing and whitespace', () => {
+    expect(parseSignalTier('mid')).toBe('mid');
+    expect(parseSignalTier('HIGH')).toBe('high');
+    expect(parseSignalTier(' Low ')).toBe('low');
+  });
+
+  it('returns null for absent or unrecognized values', () => {
+    expect(parseSignalTier(undefined)).toBeNull();
+    expect(parseSignalTier(null)).toBeNull();
+    expect(parseSignalTier('medium')).toBeNull();
+    expect(parseSignalTier(2 as unknown)).toBeNull();
+  });
+
+  it('includes a tier at or above the threshold', () => {
+    expect(signalMeetsThreshold('mid', 'mid')).toBe(true);
+    expect(signalMeetsThreshold('high', 'mid')).toBe(true);
+  });
+
+  it('excludes a tier below the threshold', () => {
+    expect(signalMeetsThreshold('low', 'mid')).toBe(false);
+    expect(signalMeetsThreshold('mid', 'high')).toBe(false);
+  });
+
+  it('excludes an absent or unrecognized signal from every threshold', () => {
+    // A user whose tier we cannot confirm never receives delegated voting power.
+    expect(signalMeetsThreshold(undefined, 'low')).toBe(false);
+    expect(signalMeetsThreshold('unknown', 'low')).toBe(false);
   });
 });

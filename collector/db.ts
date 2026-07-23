@@ -5,7 +5,9 @@ import { dirname } from 'node:path';
 import type {
   BalanceRow,
   DelegateRow,
+  EthCommunityRow,
   HighSignalRow,
+  IdentityRow,
   ProposalRow,
   VoteRow,
 } from '../scoring-core/types.js';
@@ -48,6 +50,21 @@ export function openDb(path: string): DB {
       hs_username TEXT,
       hs_rank     INTEGER,
       PRIMARY KEY (address, date)
+    );
+    -- External high-signal addresses from other communities (Ethereum
+    -- Communities delegation cohort). Keyed by address; last project wins.
+    CREATE TABLE IF NOT EXISTS eth_communities (
+      address     TEXT PRIMARY KEY,
+      project     TEXT NOT NULL,
+      hs_username TEXT
+    );
+    -- Extra eth addresses a delegate's HighSignal identity published, one row
+    -- per (delegate, linked address). Rebuilt each run.
+    CREATE TABLE IF NOT EXISTS identities (
+      delegate    TEXT NOT NULL,
+      address     TEXT NOT NULL,
+      hs_username TEXT,
+      PRIMARY KEY (delegate, address)
     );
     -- Block number per UTC date, cached: resolving one costs ~15 RPC calls.
     CREATE TABLE IF NOT EXISTS block_cache (
@@ -136,6 +153,35 @@ export function upsertHighSignal(db: DB, rows: HighSignalRow[]): void {
   })(rows);
 }
 
+/**
+ * Replace the eth-communities set wholesale: the cohort is derived fresh each
+ * run from the configured projects, so a stale address must not linger.
+ */
+export function replaceEthCommunities(db: DB, rows: EthCommunityRow[]): void {
+  const insert = db.prepare(`
+    INSERT INTO eth_communities (address, project, hs_username) VALUES (?, ?, ?)
+    ON CONFLICT(address) DO UPDATE SET project = excluded.project, hs_username = excluded.hs_username
+  `);
+  db.transaction((items: EthCommunityRow[]) => {
+    db.prepare('DELETE FROM eth_communities').run();
+    for (const e of items) insert.run(norm(e.address), e.project, e.hsUsername);
+  })(rows);
+}
+
+/** Rebuild the identity → linked-address map wholesale each run. */
+export function replaceIdentities(db: DB, rows: IdentityRow[]): void {
+  const insert = db.prepare(`
+    INSERT INTO identities (delegate, address, hs_username) VALUES (?, ?, ?)
+    ON CONFLICT(delegate, address) DO UPDATE SET hs_username = excluded.hs_username
+  `);
+  db.transaction((items: IdentityRow[]) => {
+    db.prepare('DELETE FROM identities').run();
+    for (const id of items) {
+      for (const linked of id.linkedAddresses) insert.run(norm(id.address), norm(linked), id.hsUsername);
+    }
+  })(rows);
+}
+
 export function getCachedBlock(db: DB, date: string): number | null {
   const row = db.prepare('SELECT block FROM block_cache WHERE date = ?').get(date) as
     | { block: number }
@@ -163,6 +209,8 @@ export function readAll(db: DB): {
   proposals: ProposalRow[];
   votes: VoteRow[];
   highsignal: HighSignalRow[];
+  ethCommunities: EthCommunityRow[];
+  identities: IdentityRow[];
 } {
   const delegates = (
     db.prepare('SELECT * FROM delegates ORDER BY address').all() as Array<Record<string, string>>
@@ -202,5 +250,24 @@ export function readAll(db: DB): {
     hsRank: (r.hs_rank ?? null) as number | null,
   }));
 
-  return { delegates, balances, proposals, votes, highsignal };
+  const ethCommunities = (
+    db.prepare('SELECT * FROM eth_communities ORDER BY address').all() as any[]
+  ).map((r) => ({
+    address: r.address as string,
+    project: r.project as string,
+    hsUsername: (r.hs_username ?? null) as string | null,
+  }));
+
+  const byDelegate = new Map<string, IdentityRow>();
+  for (const r of db.prepare('SELECT * FROM identities ORDER BY delegate, address').all() as any[]) {
+    let id = byDelegate.get(r.delegate as string);
+    if (!id) {
+      id = { address: r.delegate as string, hsUsername: (r.hs_username ?? null) as string | null, linkedAddresses: [] };
+      byDelegate.set(r.delegate as string, id);
+    }
+    id.linkedAddresses.push(r.address as string);
+  }
+  const identities = [...byDelegate.values()];
+
+  return { delegates, balances, proposals, votes, highsignal, ethCommunities, identities };
 }

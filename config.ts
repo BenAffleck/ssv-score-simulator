@@ -5,6 +5,7 @@
  * from `scoring-core/params.ts`, which is pure and free of env/Node deps.
  */
 import 'dotenv/config';
+import { SIGNAL_TIERS, type SignalTier } from './collector/highsignal/types.js';
 
 // ---------------------------------------------------------------------------
 // Derived config — real values from the DAOx project. Safe defaults.
@@ -18,6 +19,39 @@ export const SNAPSHOT_API = process.env.SNAPSHOT_API ?? 'https://hub.snapshot.or
 export const GNOSIS_DELEGATION_API = 'https://delegate-api.gnosisguild.org/api/v1';
 export const HIGHSIGNAL_API = 'https://app.highsignal.xyz/api/users';
 export const HIGHSIGNAL_PROJECT = 'ssv';
+
+/**
+ * Other HighSignal project slugs whose high-signal users seed the Ethereum
+ * Communities delegation cohort. Comma-separated in the env; empty by default,
+ * in which case the collector skips the cohort and `dataset.json` carries an
+ * empty `ethCommunities` array.
+ */
+export const HIGHSIGNAL_ETH_PROJECTS = (process.env.HIGHSIGNAL_ETH_PROJECTS ?? '')
+  .split(',')
+  .map((s) => s.trim())
+  .filter((s) => s.length > 0);
+
+/**
+ * Minimum HighSignal `signal` tier (`low` | `mid` | `high`) for a user to seed
+ * the Ethereum Communities cohort — and thus receive delegated voting power.
+ * Defaults to `mid`, so only mid- and high-signal users are included.
+ */
+export const HIGHSIGNAL_ETH_MIN_SIGNAL: SignalTier = parseMinSignal(process.env.HIGHSIGNAL_ETH_MIN_SIGNAL);
+
+function parseMinSignal(raw: string | undefined): SignalTier {
+  const v = (raw ?? 'mid').trim().toLowerCase();
+  const tier = SIGNAL_TIERS.find((t) => t === v);
+  if (!tier) {
+    // Fail fast, name the field (SPEC §9). Thrown as a plain Error because this
+    // runs at module load, before the ConfigError class below is initialized.
+    throw new Error(
+      `Missing/invalid required config: HIGHSIGNAL_ETH_MIN_SIGNAL\n` +
+        `  → Expected one of ${SIGNAL_TIERS.join(', ')}, got "${raw}".\n` +
+        `  → Set it in .env (see .env.example).`,
+    );
+  }
+  return tier;
+}
 
 /** SSV ERC-20 (chain 1, 18 dec). */
 export const SSV_ADDRESS = process.env.SSV_ADDRESS ?? '0x9D65fF81a3c488d585bBfb0Bfe3c7707c7917f54';

@@ -16,13 +16,18 @@ import type {
   BalanceRow,
   Dataset,
   DelegateRow,
+  EthCommunityRow,
   HighSignalRow,
+  IdentityRow,
   ProposalRow,
   VoteRow,
 } from './types.js';
 
-/** Bumped only if the on-disk dataset shape changes incompatibly. */
-export const DATASET_VERSION = 1;
+/**
+ * Bumped to 2 when `ethCommunities` was added. The field is optional on import
+ * (an absent array reads as []), so a v1 dataset still loads unchanged.
+ */
+export const DATASET_VERSION = 2;
 
 export class DatasetError extends Error {
   constructor(message: string) {
@@ -65,6 +70,8 @@ export function parseDataset(input: unknown): Dataset {
     proposals: array(root.proposals, 'proposals').map(proposal),
     votes: array(root.votes, 'votes').map(vote),
     highsignal: array(root.highsignal, 'highsignal').map(highSignal),
+    ethCommunities: array(root.ethCommunities, 'ethCommunities').map(ethCommunity),
+    identities: array(root.identities, 'identities').map(identity),
   };
 }
 
@@ -126,6 +133,26 @@ const highSignal = (v: unknown, i: number): HighSignalRow => {
     score: num(r.score, `highsignal[${i}].score`),
     hsUsername: typeof r.hsUsername === 'string' ? r.hsUsername : null,
     hsRank: Number.isFinite(Number(r.hsRank)) && r.hsRank !== null ? Number(r.hsRank) : null,
+  };
+};
+
+const ethCommunity = (v: unknown, i: number): EthCommunityRow => {
+  const r = record(v, `ethCommunities[${i}]`);
+  return {
+    address: str(r.address, `ethCommunities[${i}].address`),
+    project: str(r.project, `ethCommunities[${i}].project`, ''),
+    hsUsername: typeof r.hsUsername === 'string' ? r.hsUsername : null,
+  };
+};
+
+const identity = (v: unknown, i: number): IdentityRow => {
+  const r = record(v, `identities[${i}]`);
+  return {
+    address: str(r.address, `identities[${i}].address`),
+    hsUsername: typeof r.hsUsername === 'string' ? r.hsUsername : null,
+    linkedAddresses: array(r.linkedAddresses, `identities[${i}].linkedAddresses`).map((a, j) =>
+      str(a, `identities[${i}].linkedAddresses[${j}]`),
+    ),
   };
 };
 
