@@ -5,25 +5,32 @@
 import { COHORT_KEYS, type CohortKey, type DelegationConfig } from './delegation.js';
 import type { CommunityMode, HoldingsMode, ScoringParams } from './types.js';
 
-/** The proposal defaults: w={3,3,10}, HOLD_REF=10000, p=0.5, T=180, H=90, N=5. */
+/**
+ * The proposal defaults: w={3,3,10}, HOLD_REF=10000, p=0.5, H=90.
+ *
+ * Two departures from the proposal, both deliberate: it says T=180 and N=5,
+ * the simulator defaults to T=90 and N=10. The worked example is still
+ * reproduced against the proposal's values by passing them explicitly, so its
+ * ratified figures stay pinned regardless of these defaults.
+ */
 export const DEFAULT_PARAMS: ScoringParams = {
   weights: { community: 3, holdings: 3, votes: 10 },
-  holdings: { ref: 10_000, concavity: 0.5, mode: 'power', windowDays: 180 },
-  votes: { halfLifeDays: 90, windowN: 5 },
+  holdings: { ref: 10_000, concavity: 0.5, mode: 'power', windowDays: 90 },
+  votes: { halfLifeDays: 90, windowN: 10 },
   community: { mode: 'native', refValue: 100 },
   // A delegate with no data for a live pillar scores 0 there, so missing data
   // can never outrank a measured value.
   missingPolicy: 'zero',
 };
 
-/** Cohort split ratified with the DAO: 30/20/20/20/10, sums to 100%. */
+/** Cohort split ratified with the DAO: 45/25/10/15/5, sums to 100%. */
 export const DEFAULT_DELEGATION: DelegationConfig = {
   totalDelegatable: 200_000,
-  ssvCommunity: { pct: 30, scoreThreshold: 25 },
-  verifiedOperators: { pct: 20, minMembers: 5 },
-  professional: { pct: 20, minMembers: 1 },
-  grantRecipients: { pct: 20, minMembers: 5 },
-  ethCommunities: { pct: 10 },
+  ssvCommunity: { pct: 45, scoreThreshold: 20 },
+  verifiedOperators: { pct: 25, minMembers: 5 },
+  professional: { pct: 10, minMembers: 1 },
+  grantRecipients: { pct: 15, minMembers: 5 },
+  ethCommunities: { pct: 5 },
   assignments: {},
 };
 

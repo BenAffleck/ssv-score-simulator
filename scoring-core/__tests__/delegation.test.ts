@@ -42,15 +42,17 @@ describe('computeDelegation — SSV Community', () => {
     const rows = [row('0xa', 80), row('0xb', 40), row('0xc', 26)]; // all > 25
     const r = computeDelegation(rows, config(), []);
     const ssv = summary(r, 'ssvCommunity');
-    expect(ssv.budget).toBe(30_000); // 30% of 100k
+    expect(ssv.budget).toBe(45_000); // 45% of 100k
     expect(ssv.memberCount).toBe(3);
-    expect(ssv.perMember).toBe(10_000);
-    expect(r.perEntity.get('0xa')).toEqual({ power: 10_000, cohort: 'ssvCommunity' });
+    expect(ssv.perMember).toBe(15_000);
+    expect(r.perEntity.get('0xa')).toEqual({ power: 15_000, cohort: 'ssvCommunity' });
   });
 
   it('excludes entities at or below the (configurable) score threshold', () => {
     const rows = [row('0xa', 25), row('0xb', 25.0001), row('0xc', null)];
-    const r = computeDelegation(rows, config(), []);
+    // Threshold pinned here, not inherited: this pins the strictly-greater-than
+    // boundary, which must hold whatever the ratified default happens to be.
+    const r = computeDelegation(rows, config({ ssvCommunity: { pct: 45, scoreThreshold: 25 } }), []);
     expect(summary(r, 'ssvCommunity').memberCount).toBe(1); // only 0xb
     expect(r.perEntity.has('0xa')).toBe(false);
     expect(r.perEntity.has('0xc')).toBe(false);
@@ -62,7 +64,7 @@ describe('computeDelegation — manual cohorts', () => {
     const rows = [row('0xa', 80), row('0xb', 80), row('0xc', 80)];
     const r = computeDelegation(rows, config({ assignments: { '0xa': 'verifiedOperators' } }), []);
     expect(r.perEntity.get('0xa')).toEqual({
-      power: 20_000, // sole member of a 20% (=20k) cohort
+      power: 25_000, // sole member of a 25% (=25k) cohort
       cohort: 'verifiedOperators',
     });
     expect(summary(r, 'ssvCommunity').memberCount).toBe(2); // 0xb, 0xc only
@@ -85,8 +87,8 @@ describe('computeDelegation — Ethereum Communities', () => {
     const r = computeDelegation(rows, config(), [eth('0xe1'), eth('0xE1'), eth('0xe2')]);
     const ethCohort = summary(r, 'ethCommunities');
     expect(ethCohort.memberCount).toBe(2); // 0xe1, 0xe2 (deduped, case-insensitive)
-    expect(ethCohort.perMember).toBe(5_000); // 10% of 100k / 2
-    expect(r.perEntity.get('0xe1')).toEqual({ power: 5_000, cohort: 'ethCommunities' });
+    expect(ethCohort.perMember).toBe(2_500); // 5% of 100k / 2
+    expect(r.perEntity.get('0xe1')).toEqual({ power: 2_500, cohort: 'ethCommunities' });
     expect(r.perEntity.get('0xe2')?.cohort).toBe('ethCommunities'); // included despite null score
   });
 
@@ -134,7 +136,7 @@ describe('computeDelegation — minimum nominations', () => {
     );
     const vops = summary(r, 'verifiedOperators');
     expect(vops.warning).toMatch(/1 of 5/);
-    expect(vops.perMember).toBe(20_000); // still calculated
+    expect(vops.perMember).toBe(25_000); // still calculated
     expect(r.warnings.some((w) => w.includes('Verified Operators'))).toBe(true);
   });
 

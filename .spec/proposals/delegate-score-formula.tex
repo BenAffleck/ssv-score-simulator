@@ -1,0 +1,14 @@
+\documentclass[border=10pt,preview]{standalone}
+\usepackage{amsmath}
+\begin{document}
+\[
+\text{Score}=\frac{\sum_{i} w_i S_i}{\sum_{i} w_i}
+\qquad\text{where}\qquad
+\begin{aligned}
+S_{\text{com}} &= c \in [0,100]\\[2pt]
+S_{\text{hold}} &= 100\,\min\!\Bigl(1,\bigl(\tfrac{\bar{b}}{R}\bigr)^{p}\Bigr),
+   \quad \bar{b}=\tfrac{1}{T}\!\sum_{t=1}^{T} b_t\\[2pt]
+S_{\text{vote}} &= 100\,\frac{\sum_{j=1}^{N} v_j\,2^{-a_j/H}}{\sum_{j=1}^{N} 2^{-a_j/H}}
+\end{aligned}
+\]
+\end{document}

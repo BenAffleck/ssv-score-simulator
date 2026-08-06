@@ -4,11 +4,11 @@
   "exportedAt": "2026-07-22T00:00:00.000Z",
   "delegation": {
     "totalDelegatable": 200000,
-    "ssvCommunity": { "pct": 30, "scoreThreshold": 25 },
-    "verifiedOperators": { "pct": 20, "minMembers": 5 },
-    "professional": { "pct": 20, "minMembers": 1 },
-    "grantRecipients": { "pct": 20, "minMembers": 5 },
-    "ethCommunities": { "pct": 10 },
+    "ssvCommunity": { "pct": 45, "scoreThreshold": 20 },
+    "verifiedOperators": { "pct": 25, "minMembers": 5 },
+    "professional": { "pct": 10, "minMembers": 1 },
+    "grantRecipients": { "pct": 15, "minMembers": 5 },
+    "ethCommunities": { "pct": 5 },
     "assignments": {
       "0xf2659cc196829c6676b1e0e1a71a8797cec6778a": "verifiedOperators",
       "0x26b0bb09478a8423b53b2854deffb8a61a889725": "verifiedOperators",

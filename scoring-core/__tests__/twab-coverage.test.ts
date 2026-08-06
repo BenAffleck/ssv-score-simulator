@@ -131,13 +131,13 @@ describe('twabDays is reported for auditability', () => {
 
   it('reports the truncated window when history is shorter than T', () => {
     const row = simulate(indexDataset(dataset(5)), DEFAULT_PARAMS, END)[0]!;
-    expect(row.raw.twabDays).toBe(5); // not 180
+    expect(row.raw.twabDays).toBe(5); // not the full T
     expect(row.raw.twab).toBeCloseTo(12_000, 6);
     expect(row.pillars.holdings).toBe(100);
   });
 
   it('reports the full window when history is long enough', () => {
     const row = simulate(indexDataset(dataset(200)), DEFAULT_PARAMS, END)[0]!;
-    expect(row.raw.twabDays).toBe(180);
+    expect(row.raw.twabDays).toBe(DEFAULT_PARAMS.holdings.windowDays);
   });
 });
