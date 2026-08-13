@@ -367,7 +367,7 @@ function Simulator({
           </div>
         </div>
 
-        <DelegationBreakdown result={delegationResult} totalDelegatable={delegation.totalDelegatable} />
+        <DelegationBreakdown result={delegationResult} />
 
         <Leaderboard
           rows={visibleRows}

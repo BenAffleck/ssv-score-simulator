@@ -26,6 +26,7 @@ export const DEFAULT_PARAMS: ScoringParams = {
 /** Cohort split ratified with the DAO: 45/25/10/15/5, sums to 100%. */
 export const DEFAULT_DELEGATION: DelegationConfig = {
   totalDelegatable: 200_000,
+  powerCap: 750_000,
   ssvCommunity: { pct: 45, scoreThreshold: 20 },
   verifiedOperators: { pct: 25, minMembers: 5 },
   professional: { pct: 10, minMembers: 1 },
@@ -66,6 +67,7 @@ export function clonePolicy(p: ScoringParams): ScoringParams {
 export function cloneDelegation(d: DelegationConfig): DelegationConfig {
   return {
     totalDelegatable: d.totalDelegatable,
+    powerCap: d.powerCap,
     ssvCommunity: { ...d.ssvCommunity },
     verifiedOperators: { ...d.verifiedOperators },
     professional: { ...d.professional },
@@ -158,6 +160,16 @@ export function parseDelegation(input: unknown): DelegationConfig {
 
   return {
     totalDelegatable: num(raw.totalDelegatable, d.totalDelegatable, 0),
+    // An explicit null means "uncapped" and round-trips as such. A *missing*
+    // key falls back to the ratified cap like every other field here, so a
+    // preset exported before the cap existed is read under it rather than
+    // silently reinstating an unbounded program.
+    powerCap:
+      raw.powerCap === undefined
+        ? d.powerCap
+        : raw.powerCap === null
+          ? null
+          : num(raw.powerCap, d.powerCap ?? 0, 0),
     ssvCommunity: {
       pct: num(ssv.pct, d.ssvCommunity.pct, 0),
       scoreThreshold: num(ssv.scoreThreshold, d.ssvCommunity.scoreThreshold, 0),

@@ -4,6 +4,7 @@
   "exportedAt": "2026-07-22T00:00:00.000Z",
   "delegation": {
     "totalDelegatable": 200000,
+    "powerCap": 750000,
     "ssvCommunity": { "pct": 45, "scoreThreshold": 20 },
     "verifiedOperators": { "pct": 25, "minMembers": 5 },
     "professional": { "pct": 10, "minMembers": 1 },

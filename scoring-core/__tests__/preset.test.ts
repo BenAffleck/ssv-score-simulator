@@ -67,6 +67,7 @@ describe('preset round-trip', () => {
 describe('delegation preset — separate from the scoring preset', () => {
   const DELEGATION: DelegationConfig = {
     totalDelegatable: 250_000,
+    powerCap: 180_000,
     ssvCommunity: { pct: 35, scoreThreshold: 30 },
     verifiedOperators: { pct: 15, minMembers: 7 },
     professional: { pct: 20, minMembers: 2 },
@@ -93,6 +94,23 @@ describe('delegation preset — separate from the scoring preset', () => {
   it('falls back to defaults for missing or malformed input', () => {
     expect(parseDelegationPreset({})).toEqual(DEFAULT_DELEGATION);
     expect(parseDelegationPreset(null)).toEqual(DEFAULT_DELEGATION);
+  });
+
+  it('round-trips an explicitly uncapped program as uncapped', () => {
+    const uncapped = { ...DELEGATION, powerCap: null };
+    const json = JSON.stringify(exportDelegationPreset(uncapped, 'x'));
+    expect(parseDelegationPreset(JSON.parse(json)).powerCap).toBeNull();
+  });
+
+  it('reads a pre-cap preset under the ratified cap rather than as uncapped', () => {
+    // A preset exported before the cap existed carries no `powerCap`. Treating
+    // that as "no cap" would silently reinstate an unbounded program.
+    const { powerCap, ...legacy } = DELEGATION;
+    expect(parseDelegation(legacy).powerCap).toBe(DEFAULT_DELEGATION.powerCap);
+  });
+
+  it('clamps a negative cap to zero rather than inverting the comparison', () => {
+    expect(parseDelegation({ powerCap: -5000 }).powerCap).toBe(0);
   });
 
   it('keeps any of the five cohorts and drops unknown strings from assignments', () => {

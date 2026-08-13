@@ -3,7 +3,9 @@
  *
  * Simulates how a lump sum of delegatable SSV/cSSV ("auto-delegation") would be
  * distributed as voting power across five cohorts, and how that power lands on
- * the leaderboard. This is the single place all cohort math lives, mirroring how
+ * the leaderboard. A program cap bounds the pool first: anything delegated above
+ * it is voided rather than distributed, so the program's total influence has a
+ * ceiling the DAO sets. This is the single place all cohort math lives, mirroring how
  * `simulate.ts`/`composite.ts` centralize scoring — the UI and any tooling share
  * exactly one implementation.
  *
@@ -44,6 +46,17 @@ export const MANUAL_COHORTS: readonly ManualCohort[] = [
 export interface DelegationConfig {
   /** D — the SSV+cSSV lump sum delegated to/by the DAO via auto-delegation. */
   totalDelegatable: number;
+  /**
+   * C — the program cap: the most voting power the program may ever distribute,
+   * however much is delegated to it. Anything above it is **voided**, not held:
+   * it is never assigned to a cohort, and never votes. `null` = uncapped.
+   *
+   * This exists because D is not a number the DAO sets — it is the sum of what
+   * token holders choose to auto-delegate, and it only grows. Without a ceiling,
+   * a successful program eventually concentrates enough voting power in one
+   * allocation rule to carry a proposal on its own.
+   */
+  powerCap: number | null;
   ssvCommunity: { pct: number; scoreThreshold: number };
   verifiedOperators: { pct: number; minMembers: number };
   professional: { pct: number; minMembers: number };
@@ -76,9 +89,20 @@ export interface DelegationResult {
   perEntity: Map<string, { power: number; cohort: CohortKey }>;
   cohorts: CohortSummary[];
   totalAllocated: number;
-  /** D − Σ budgets — a reserve when the cohort percentages sum below 100. */
+  /** D_eff − Σ budgets — a reserve when the cohort percentages sum below 100. */
   unallocated: number;
   warnings: string[];
+  /** D as delegated, before the cap. */
+  delegated: number;
+  /** The cap in force (C), or null when uncapped. */
+  cap: number | null;
+  /** D_eff = min(D, C) — the pool the cohort shares are actually taken from. */
+  effective: number;
+  /**
+   * max(0, D − C) — voting power the program permanently declines. Distinct
+   * from `unallocated`, which is inside the cap and still the DAO's to assign.
+   */
+  voided: number;
 }
 
 function pctOf(pct: number, total: number): number {
@@ -97,7 +121,14 @@ export function computeDelegation(
   cfg: DelegationConfig,
   ethMembers: EthCommunityRow[],
 ): DelegationResult {
-  const D = Math.max(0, cfg.totalDelegatable);
+  const delegated = Math.max(0, cfg.totalDelegatable);
+
+  // The cap binds before anything else: every cohort budget, and therefore
+  // every delegate's power, is a share of the capped pool. Excess is voided —
+  // it does not fall through to the reserve, and no cohort can ever see it.
+  const cap = cfg.powerCap === null || !Number.isFinite(cfg.powerCap) ? null : Math.max(0, cfg.powerCap);
+  const D = cap === null ? delegated : Math.min(delegated, cap);
+  const voided = delegated - D;
 
   // Address → pinned cohort, but only for addresses that are actually on the
   // leaderboard (a stale assignment for a since-removed delegate is ignored).
@@ -157,6 +188,14 @@ export function computeDelegation(
   const warnings: string[] = [];
   let totalAllocated = 0;
 
+  // Surfaced, never silent: a binding cap changes every delegate's power, and
+  // an operator reading the leaderboard must be able to see why.
+  if (voided > 0) {
+    warnings.push(
+      `Program cap of ${cap} reached: ${round(voided)} of ${round(delegated)} delegated is voided.`,
+    );
+  }
+
   for (const cohort of COHORT_KEYS) {
     const list = members[cohort];
     const budget = pctOf(pct[cohort], D);
@@ -181,5 +220,11 @@ export function computeDelegation(
     totalAllocated,
     unallocated: Math.max(0, D - totalAllocated),
     warnings,
+    delegated,
+    cap,
+    effective: D,
+    voided,
   };
 }
+
+const round = (x: number): number => Math.round(x * 100) / 100;

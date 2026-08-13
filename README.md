@@ -315,6 +315,11 @@ per-member power falls as the cohort grows — lowering the score threshold wide
 dilutes everyone in it. The shipped defaults live in `data/delegation-default.json` and can be
 exported/imported as their own preset, never mixed with a scoring preset.
 
+**Program cap.** The pool is whatever token holders auto-delegate, and it only grows, so the program
+carries a ceiling: `effective = min(pool, CAP)`, and `max(0, pool − CAP)` is **voided** — never
+assigned to a cohort, never voted, and distinct from the unallocated reserve, which stays inside the
+cap. The cap is applied *before* the split, so a binding cap scales every member's power down
+together without changing the cohort balance or membership, and always raises a warning.
 ---
 
 ## Using the simulator
@@ -322,8 +327,8 @@ exported/imported as their own preset, never mixed with a scoring preset.
 - **Parameter panel** — weights, `HOLD_REF`, concavity `p` (0.3–1.0, + log-mode toggle), TWAB
   window `T`, half-life `H`, proposal window `N`, community normalization, missing-data policy.
   Everything recomputes instantly, in-browser.
-- **Delegation panel** — pool size, cohort shares, score threshold and minimum nominations, with
-  live member counts and under-nomination warnings.
+- **Delegation panel** — pool size, program cap (toggleable), cohort shares, score threshold and
+  minimum nominations, with live member counts, voided-power readout and under-nomination warnings.
 - **As-of scrubber** — pick any date in the collected range. Scores use **only** data up to that
   date: later balances, votes and HighSignal observations are ignored.
 - **Leaderboard** — sortable by score, any pillar, TWAB or allocated power; searchable by name,
@@ -344,6 +349,7 @@ Figures below are from the current roster (486 delegates, 125 proposals) at the 
 | Half-life `H` → 14d | Missing the *newest* proposals becomes brutal (74.6 → 36.3) — while an 8-of-10 voter who only missed old ones climbs to 99.2. |
 | `missingPolicy` → exclude | The five measured delegates all lose rank; the top one falls #1 → #4. |
 | SSV Community threshold ↓ | The cohort widens and per-member power falls — the dilution trade-off, live. |
+| Pool → 1,000,000 at the default cap | 250,000 is voided; every cohort budget stays put, because the split is taken from the cap, not the pool. |
 | Scrub back 6 months | A delegate who has since gone quiet ranks near the top again. |
 
 ---

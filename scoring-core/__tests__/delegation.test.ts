@@ -31,7 +31,14 @@ function row(address: string, score: number | null): LeaderboardRow {
 }
 
 function config(patch: Partial<DelegationConfig> = {}): DelegationConfig {
-  return { ...cloneDelegation(DEFAULT_DELEGATION), totalDelegatable: 100_000, ...patch };
+  // Uncapped unless a test says otherwise, so the pre-cap allocation rules are
+  // still pinned by exactly the numbers they were written against.
+  return {
+    ...cloneDelegation(DEFAULT_DELEGATION),
+    totalDelegatable: 100_000,
+    powerCap: null,
+    ...patch,
+  };
 }
 
 const summary = (r: ReturnType<typeof computeDelegation>, cohort: string) =>
@@ -147,6 +154,71 @@ describe('computeDelegation — minimum nominations', () => {
     });
     const r = computeDelegation([row('0xa', 80), row('0xb', 80)], cfg, []);
     expect(summary(r, 'verifiedOperators').warning).toBeUndefined();
+  });
+});
+
+describe('computeDelegation — program cap', () => {
+  it('splits only the capped pool and voids the excess', () => {
+    const rows = [row('0xa', 80), row('0xb', 80)];
+    const r = computeDelegation(rows, config({ totalDelegatable: 500_000, powerCap: 200_000 }), []);
+    expect(r.delegated).toBe(500_000);
+    expect(r.effective).toBe(200_000);
+    expect(r.voided).toBe(300_000);
+    // 45% of the CAP, not of the 500k delegated.
+    expect(summary(r, 'ssvCommunity').budget).toBe(90_000);
+    expect(r.perEntity.get('0xa')?.power).toBe(45_000);
+  });
+
+  it('voids the excess rather than holding it in reserve', () => {
+    const rows = [row('0xa', 80)];
+    const r = computeDelegation(rows, config({ totalDelegatable: 500_000, powerCap: 200_000 }), []);
+    // Only SSV Community has members, so 90k of the 200k cap is allocated and
+    // 110k is reserve. The 300k above the cap is gone — not added to it.
+    expect(r.totalAllocated).toBe(90_000);
+    expect(r.unallocated).toBe(110_000);
+    expect(r.unallocated + r.totalAllocated).toBe(r.effective);
+  });
+
+  it('leaves allocation untouched when the cap is not binding', () => {
+    const rows = [row('0xa', 80), row('0xb', 80)];
+    const capped = computeDelegation(rows, config({ powerCap: 250_000 }), []);
+    const uncapped = computeDelegation(rows, config(), []);
+    expect(capped.voided).toBe(0);
+    expect(capped.warnings.some((w) => /cap/i.test(w))).toBe(false);
+    expect(capped.cohorts).toEqual(uncapped.cohorts);
+  });
+
+  it('warns whenever the cap actually voids power', () => {
+    const r = computeDelegation([row('0xa', 80)], config({ powerCap: 40_000 }), []);
+    expect(r.warnings.some((w) => /cap/i.test(w) && /void/i.test(w))).toBe(true);
+  });
+
+  it('distributes nothing at a zero cap, and everything when uncapped', () => {
+    const rows = [row('0xa', 80)];
+    const zero = computeDelegation(rows, config({ powerCap: 0 }), []);
+    expect(zero.effective).toBe(0);
+    expect(zero.voided).toBe(100_000);
+    expect(zero.perEntity.get('0xa')?.power).toBe(0);
+
+    const none = computeDelegation(rows, config({ powerCap: null }), []);
+    expect(none.cap).toBeNull();
+    expect(none.effective).toBe(100_000);
+    expect(none.voided).toBe(0);
+  });
+
+  it('ships a cap with headroom over the ratified pool, so it voids nothing today', () => {
+    // The shipped cap (750k) is 3.75× the ratified pool (200k): adopting it
+    // moves nothing, and it only binds once the program has nearly quadrupled.
+    const cfg = cloneDelegation(DEFAULT_DELEGATION);
+    const r = computeDelegation([row('0xa', 80)], cfg, []);
+    expect(cfg.powerCap).toBe(750_000);
+    expect(r.voided).toBe(0);
+    expect(r.effective).toBe(DEFAULT_DELEGATION.totalDelegatable);
+
+    // …and it does bind above that, rather than being decorative.
+    const grown = computeDelegation([row('0xa', 80)], { ...cfg, totalDelegatable: 900_000 }, []);
+    expect(grown.effective).toBe(750_000);
+    expect(grown.voided).toBe(150_000);
   });
 });
 

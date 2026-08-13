@@ -10,7 +10,6 @@ const AXIS = { stroke: '#64748b', fontSize: 11 };
 
 interface Props {
   result: DelegationResult;
-  totalDelegatable: number;
 }
 
 /**
@@ -18,7 +17,7 @@ interface Props {
  * power and min-member status, alongside a bar of each cohort's budget. Makes
  * the source of every entity's power auditable at a glance.
  */
-export function DelegationBreakdown({ result, totalDelegatable }: Props) {
+export function DelegationBreakdown({ result }: Props) {
   const data = result.cohorts.map((c) => ({
     key: c.cohort,
     label: COHORT_LABELS[c.cohort as CohortKey],
@@ -30,7 +29,13 @@ export function DelegationBreakdown({ result, totalDelegatable }: Props) {
       <div className="chart-head">
         <h2>Delegation breakdown</h2>
         <span className="chart-note">
-          {fmtTokens(totalDelegatable)} delegatable · {fmtTokens(result.unallocated)} unallocated
+          {fmtTokens(result.delegated)} delegated ·{' '}
+          {result.voided > 0 && (
+            <>
+              <span className="warn-text">{fmtTokens(result.voided)} voided (cap)</span> ·{' '}
+            </>
+          )}
+          {fmtTokens(result.effective)} distributable · {fmtTokens(result.unallocated)} unallocated
         </span>
       </div>
 

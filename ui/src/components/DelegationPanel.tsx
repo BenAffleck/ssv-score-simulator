@@ -1,11 +1,12 @@
 import {
   COHORT_LABELS,
+  DEFAULT_DELEGATION,
   type CohortKey,
   type DelegationConfig,
   type DelegationResult,
 } from '../../../scoring-core/index.js';
-import { COHORT_COLORS } from '../theme.js';
-import { NumberField } from './Controls.js';
+import { COHORT_COLORS, fmtTokens } from '../theme.js';
+import { NumberField, Toggle } from './Controls.js';
 import { DelegationPresetBar } from './DelegationPresetBar.js';
 
 interface Props {
@@ -94,6 +95,37 @@ export function DelegationPanel({ config, onChange, onImport, onReset, result }:
         />
         <div className="hint">
           The lump sum delegated to/by the DAO, split across cohorts regardless of source.
+        </div>
+
+        <Toggle
+          label="Cap program voting power"
+          checked={config.powerCap !== null}
+          onChange={(on) =>
+            onChange({ ...config, powerCap: on ? (DEFAULT_DELEGATION.powerCap ?? 0) : null })
+          }
+        />
+        {config.powerCap !== null && (
+          <NumberField
+            label="Cap (SSV-eq)"
+            value={config.powerCap}
+            step={10_000}
+            onChange={(powerCap) => onChange({ ...config, powerCap })}
+          />
+        )}
+        <div className="hint">
+          {config.powerCap === null ? (
+            <>Uncapped — the program distributes every token delegated to it.</>
+          ) : result.voided > 0 ? (
+            <>
+              Distributing {fmtTokens(result.effective)}; {fmtTokens(result.voided)} above the cap is{' '}
+              <strong>voided</strong> — never assigned, never voted.
+            </>
+          ) : (
+            <>
+              Not binding: {fmtTokens(result.delegated)} delegated is within the{' '}
+              {fmtTokens(config.powerCap)} cap. Excess would be voided, not reserved.
+            </>
+          )}
         </div>
       </div>
 

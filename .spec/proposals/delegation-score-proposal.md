@@ -361,15 +361,84 @@ each delegate draws from **at most one**.
 
 Default pool: **200,000 SSV-equivalent.** Shares sum to 100%.
 
-**How power is assigned.** A delegate explicitly nominated to a cohort goes there. Otherwise, a
-score above the threshold puts them in SSV Community; failing that, membership of another Ethereum
-community puts them in Ethereum Communities; failing both, they receive nothing. **Within a
-cohort, the budget is split equally.**
+### The program cap
+
+**The pool is not a number the DAO sets.** It is the sum of what token holders choose to
+auto-delegate to the program, and it only moves one way. A programme that works accumulates voting
+power, and at some size the question stops being "which delegates should this fund?" and becomes
+"should one allocation rule decide SSV governance?"
+
+The **program cap `C`** answers that in advance. It is a hard ceiling on the voting power the
+program will ever distribute:
 
 ```
-cohort budget      = share × 200,000
+effective = min(pool, CAP)
+voided    = max(0, pool − CAP)
+```
+
+**Power above the cap is voided — permanently declined.** It is not held in reserve, not queued for
+later, and never reaches a cohort or a vote. This is deliberate: a reserve is power the program
+still controls, and would defeat the point of having a ceiling at all.
+
+**Proposed cap: `C` = 750,000 SSV-equivalent** — 3.75× the pool ratified above. It **voids nothing
+today** and binds only once the program has nearly quadrupled, at which point growth stops rather
+than continuing indefinitely.
+
+Measured against SSV's live Snapshot governance, over the last 60 closed proposals:
+
+| Anchor | Measured | The cap at 750,000 is |
+|---|---|---|
+| Ratified pool | 200,000 SSV | **3.75×** — 550,000 of headroom before the cap binds |
+| Current quorum | 303,829 SSV | **247% of quorum** |
+| Median turnout, last 12 contested proposals | 426,878 SSV | **63.7% of votes cast** |
+| Lowest turnout, last 12 | 368,801 SSV | 67.0% of votes cast |
+| SSV total supply | 17,361,674 | 4.32% of supply |
+| Combined holdings of all 486 delegates | 555,251 SSV | 135% |
+
+**What the cap guarantees.** The program has a terminal size. It can absorb 3.75× its current
+delegation and not one token more; everything beyond is voided rather than quietly accumulating.
+A pool that only ever grows otherwise has no natural stopping point, and the DAO would be
+re-litigating its size under pressure rather than in advance.
+
+**What it does not guarantee, stated plainly.** At 750,000 the program at full size sits above
+quorum, above half of typical turnout, and above the combined time-weighted holdings of the entire
+delegate roster. It could therefore make a proposal valid on its own, and —
+*if every funded delegate voted identically* — carry it. That last condition is the load-bearing
+one: the cap bounds the program, not the independence of the ~30 delegates drawing from it, and the
+allocation rules are deliberately built so that power lands on many independently-acting delegates
+rather than a bloc. The DAO should hold that assumption consciously rather than by omission.
+
+For the record, the levels at which the stronger properties would hold: **~250,000** to keep the
+program below a (rising) quorum, and **~213,000** to keep it under a one-third blocking minority at
+median turnout. Both sit at or near today's 200,000 pool, so adopting either would mean capping the
+program at roughly its present size. **750,000 trades those guarantees for room to grow**, and is
+the level the DAO's own analysis supports.
+
+A cap is far easier to raise than to lower once delegates rely on the power, so the DAO may wish to
+pair this with a commitment to re-measure the quorum and turnout anchors — a single query against
+the Snapshot API — before the program approaches the ceiling.
+
+> **What a delegate sees when the cap binds.** Per-member power falls for everyone in every cohort,
+> proportionally — the cap is applied to the pool before the split, so it never changes the 45/25/10/15/5
+> balance or who is in which cohort. A binding cap always raises a visible warning; it is never silent.
+
+### How power is assigned
+
+A delegate explicitly nominated to a cohort goes there. Otherwise, a score above the threshold puts
+them in SSV Community; failing that, membership of another Ethereum community puts them in Ethereum
+Communities; failing both, they receive nothing. **Within a cohort, the budget is split equally.**
+
+```
+cohort budget      = share × min(pool, CAP)
 power per delegate = cohort budget / number of delegates in that cohort
 ```
+
+![Delegation allocation under the cap](delegation-allocation.svg)
+
+Where `D` is the delegated pool, `C` the cap, `sₖ` a cohort's share, `Mₖ` its members and `πₖ` the
+power each member draws. At the proposed cap, the first line reads:
+
+![The cap at its proposed value](delegation-cap-defaults.svg)
 
 So if 100 delegates clear the threshold, SSV Community's 90,000 is split 900 each. **Per-member
 power falls as a cohort grows** — lowering the score threshold widens the cohort and dilutes
@@ -397,6 +466,7 @@ Every constant is a lever the DAO ratifies now and can adjust later by vote.
 | Participation: recency half-life `H` | 90 days | How fast past votes decay |
 | Missing data: per-delegate policy | count as 0 | How a delegate absent from a live pillar is scored |
 | Delegation: total pool | 200,000 | Voting power to distribute |
+| **Delegation: program cap `C`** | **750,000** | **Ceiling on distributable power; the excess is voided** |
 | Delegation: cohort shares | 45 / 25 / 10 / 15 / 5 | Split across the five cohorts |
 | Delegation: SSV Community threshold | score > 20 | Who qualifies automatically |
 
@@ -470,14 +540,18 @@ By approving this proposal, the DAO agrees to:
    absence scored 0 and displayed as imputed.
 5. **Ratify the delegation allocation rules** — the five cohorts, the 45/25/10/15/5 split, the
    score threshold of 20, and equal splitting within a cohort.
-6. **Launch Pillar 1 at weight 0**, to be raised by follow-up vote once community-score coverage
+6. **Adopt the program cap at 750,000 SSV-equivalent** (3.75× the ratified pool), applied to the pool
+   before the cohort split, with power above it **voided rather than reserved** — on the
+   understanding that the cap is a governance lever like every other, that at this level the program
+   at full size would exceed quorum on its own, and that both are revisable by follow-up vote.
+7. **Launch Pillar 1 at weight 0**, to be raised by follow-up vote once community-score coverage
    is sufficient.
-7. **Accept that the delegate roster is an external input** whose generation is a separate concern,
+8. **Accept that the delegate roster is an external input** whose generation is a separate concern,
    on the understanding that changes materially altering *who* appears on the leaderboard come back
    to the DAO.
-8. **Approve ongoing operation** — regular ingestion of each pillar's data and display of the
+9. **Approve ongoing operation** — regular ingestion of each pillar's data and display of the
    resulting scores.
-9. **Recognize all weights, windows, thresholds and caps as governance levers** — any future change
+10. **Recognize all weights, windows, thresholds and caps as governance levers** — any future change
    requires a follow-up DAO vote.
 
 ---

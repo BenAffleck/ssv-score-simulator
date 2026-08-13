@@ -1,0 +1,19 @@
+\documentclass[border=10pt,preview]{standalone}
+\usepackage{amsmath}
+\begin{document}
+\[
+\begin{aligned}
+D_{\text{eff}} &= \min\!\left(D,\;C\right), \qquad
+\text{voided} \;=\; \max\!\left(0,\;D-C\right)\\[6pt]
+B_k &= s_k\,D_{\text{eff}},
+\qquad
+\pi_k \;=\;
+\begin{cases}
+\dfrac{B_k}{\lvert M_k\rvert}, & \lvert M_k\rvert>0\\[10pt]
+0, & \text{otherwise}
+\end{cases}\\[6pt]
+\text{unallocated} &= D_{\text{eff}}-\!\!\sum_{k:\,\lvert M_k\rvert>0}\!\! B_k,
+\qquad \textstyle\sum_k s_k = 1
+\end{aligned}
+\]
+\end{document}

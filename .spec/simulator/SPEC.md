@@ -295,7 +295,28 @@ across delegates. Each delegate draws power from **at most one cohort**.
 
 Total delegatable pool `D` = **200,000** SSV-equivalent by default. Shares sum to 100%.
 
-### 5.2 Resolution and allocation
+### 5.2 Program cap
+
+`D` is not a number the DAO picks — it is the sum of what token holders choose to auto-delegate,
+and it only grows. The **program cap `C`** bounds the total voting power the program may ever
+distribute:
+
+```
+effective   = min(D, C)                          // C = null → uncapped
+voided      = max(0, D − C)
+```
+
+Default **`C` = 750,000** SSV-equivalent — 3.75× the ratified 200,000 pool, so it voids nothing today
+and binds only once the program has nearly quadrupled. See §5.4 for the measured anchors.
+
+- The cap applies to the **pool, before the split**. Every cohort budget, and therefore every
+  delegate's power, is a share of `effective`.
+- Power above the cap is **voided — permanently declined.** It is never assigned to a cohort, never
+  votes, and is **not** the same as `unallocated`: the reserve sits *inside* the cap and remains the
+  DAO's to assign, the voided excess does not exist as far as allocation is concerned.
+- A binding cap **raises a warning**. It changes every delegate's power, so it is never silent.
+
+### 5.3 Resolution and allocation
 
 ```
 For each delegate on the leaderboard:
@@ -304,9 +325,9 @@ For each delegate on the leaderboard:
     else address ∈ ethCommunity  → Ethereum Communities
     else                         → no cohort, no power
 
-budget(c)    = pct(c)/100 × D
-perMember(c) = budget(c) / memberCount(c)        // 0 when the cohort is empty
-unallocated  = D − Σ budget(c) over non-empty cohorts
+budget(c)    = pct(c)/100 × effective             // the CAPPED pool, per §5.2
+perMember(c) = budget(c) / memberCount(c)         // 0 when the cohort is empty
+unallocated  = effective − Σ budget(c) over non-empty cohorts
 ```
 
 - **SSV Community takes precedence over Ethereum Communities** when a delegate qualifies for
@@ -317,6 +338,46 @@ unallocated  = D − Σ budget(c) over non-empty cohorts
   permitted and flagged, since it is a configuration error the operator should see.
 - Power is split **equally** within a cohort. A cohort's per-member power therefore falls as it
   grows — lowering the SSV Community threshold widens that cohort and dilutes each member.
+
+### 5.4 Where `C` = 750,000 sits
+
+**`C` = 750,000 is the DAO's own figure**, adopted from its analysis. This section records what that
+level measures against, so the trade-off it embodies is explicit rather than implied.
+
+Anchors are SSV's live Snapshot governance (`mainnet.ssvnetwork.eth`), over the last 60 closed
+proposals as of 2026-08-13:
+
+| Anchor | Value | The cap at 750,000 is |
+|---|---|---|
+| Ratified pool `D` | **200,000** SSV | **3.75×** — 550,000 of growth headroom before the cap binds |
+| Current quorum | **303,829** SSV | **247%** — the program at cap exceeds quorum on its own |
+| Median turnout, last 12 contested proposals | **426,878** SSV | **63.7%** of votes cast |
+| Lowest turnout, last 12 | **368,801** SSV | 67.0% of votes cast |
+| SSV total supply | **17,361,674** | 4.32% |
+| TWAB of the entire 486-delegate roster | **555,251** SSV | 135% |
+
+**What this level does bound.** It is a hard ceiling on program growth: the program can absorb 3.75×
+its current delegation and no more, and the excess is voided rather than accumulating quietly.
+Without it, a pool that only grows has no terminal size at all.
+
+**What it does not bound.** At 750,000 the program is above quorum and above half of typical turnout —
+and above the combined time-weighted holdings of the entire 486-delegate roster.
+The two properties available at a lower cap — *cannot establish quorum alone*, *cannot hold a
+blocking minority* — do **not** hold here. Whether that matters rests on an assumption this spec
+cannot verify: that the ~30 delegates drawing power vote independently rather than as a bloc. The
+cap bounds the *program*, not the correlation between the delegates it funds.
+
+For reference, the levels at which those properties would hold:
+
+| Property | Requires |
+|---|---|
+| Cannot establish quorum alone | `C` < 303,829, with headroom for a rising quorum (~250,000) |
+| Cannot hold a ⅓ blocking minority at median turnout | `C` ≤ 213,439 |
+| Cannot hold a ⅓ blocking minority at the weakest recent turnout | `C` ≤ 184,400 |
+
+Quorum is dynamic and has risen 259,323 → 303,829 across the observed window, so these thresholds
+move upward over time. Recomputing them is a one-query job against the Snapshot API; they should be
+re-measured whenever the cap is revisited.
 
 ---
 
