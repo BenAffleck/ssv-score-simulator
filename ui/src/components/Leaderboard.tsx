@@ -349,8 +349,8 @@ const PillarCell = memo(function PillarCell({ value, color, weight, missing }: {
 });
 
 function scoreColor(score: number): string {
-  if (score >= 75) return '#3fcf8e';
-  if (score >= 50) return '#e6ecf4';
-  if (score >= 25) return '#f5c451';
-  return '#f07a9c';
+  if (score >= 75) return 'var(--accent)';
+  if (score >= 50) return 'var(--foreground)';
+  if (score >= 25) return 'var(--warning)';
+  return 'var(--danger)';
 }

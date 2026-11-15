@@ -2,20 +2,20 @@
 
 /** Categorical series colours, ordered for maximum separation at small sizes. */
 export const SERIES_COLORS = [
-  '#5aa9f7',
+  '#2db1ff',
   '#f5c451',
   '#3fcf8e',
   '#f07a9c',
-  '#a78bfa',
+  '#6c588d',
   '#fb8a6b',
   '#4dd4d4',
   '#9aa8bd',
 ] as const;
 
 export const PILLAR_COLORS = {
-  community: '#a78bfa',
+  community: '#6c588d',
   holdings: '#f5c451',
-  votes: '#5aa9f7',
+  votes: '#2db1ff',
 } as const;
 
 export const PILLAR_LABELS = {
@@ -26,9 +26,9 @@ export const PILLAR_LABELS = {
 
 /** One colour per delegation cohort, reused by the grid badges and breakdown. */
 export const COHORT_COLORS = {
-  ssvCommunity: '#5aa9f7',
+  ssvCommunity: '#2db1ff',
   verifiedOperators: '#3fcf8e',
-  professional: '#a78bfa',
+  professional: '#6c588d',
   grantRecipients: '#f5c451',
   ethCommunities: '#f07a9c',
 } as const;

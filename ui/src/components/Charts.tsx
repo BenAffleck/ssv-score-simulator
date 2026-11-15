@@ -14,8 +14,8 @@ import {
 import type { Row } from '../../../scoring-core/index.js';
 import { PILLAR_COLORS, PILLAR_LABELS, fmtScore } from '../theme.js';
 
-const AXIS = { stroke: '#64748b', fontSize: 11 };
-const GRID = '#26303e';
+const AXIS = { stroke: 'var(--muted)', fontSize: 11 };
+const GRID = 'var(--border)';
 
 const shortDate = (d: string): string => d.slice(5).replace('-', '/');
 
@@ -85,7 +85,7 @@ export function ScoreChart({ data, rows, colors, asOf, selected, onSelect }: Sco
           <XAxis dataKey="date" tickFormatter={shortDate} tick={AXIS} tickLine={false} axisLine={{ stroke: GRID }} minTickGap={40} />
           <YAxis domain={[0, 100]} tick={AXIS} tickLine={false} axisLine={false} width={44} />
           <Tooltip content={<ChartTooltip />} />
-          <ReferenceLine x={asOf} stroke="#8d9bb0" strokeDasharray="4 4" />
+          <ReferenceLine x={asOf} stroke="var(--muted)" strokeDasharray="4 4" />
           {rows.map((r) => {
             if (hidden.has(r.address)) return null;
             const isSel = selected === r.address;
@@ -153,7 +153,7 @@ export function PillarChart({ data, delegate, asOf }: PillarChartProps) {
           <XAxis dataKey="date" tickFormatter={shortDate} tick={AXIS} tickLine={false} axisLine={{ stroke: GRID }} minTickGap={40} />
           <YAxis domain={[0, 100]} tick={AXIS} tickLine={false} axisLine={false} width={44} />
           <Tooltip content={<ChartTooltip />} />
-          <ReferenceLine x={asOf} stroke="#8d9bb0" strokeDasharray="4 4" />
+          <ReferenceLine x={asOf} stroke="var(--muted)" strokeDasharray="4 4" />
           {(['votes', 'holdings', 'community'] as const).map((pillar) => (
             <Area
               key={pillar}

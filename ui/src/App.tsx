@@ -33,6 +33,7 @@ import {
   type RowMeta,
 } from './components/Leaderboard.js';
 import { ParamPanel } from './components/ParamPanel.js';
+import { ThemeToggle } from './components/ThemeToggle.js';
 import { colorFor, fmtScore, fmtTokens } from './theme.js';
 import { useDataset, type DatasetSource } from './useDataset.js';
 
@@ -278,6 +279,7 @@ function Simulator({
           imported {dataset.generatedAt.slice(0, 10)}
         </span>
         <DatasetBadge dataset={dataset} source={source} importFile={importFile} onReset={onReset} />
+        <ThemeToggle />
       </header>
 
       {!sidebarCollapsed && (

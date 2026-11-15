@@ -2,7 +2,7 @@ import { Bar, BarChart, Cell, ResponsiveContainer, XAxis, YAxis } from 'recharts
 import { COHORT_LABELS, type Allocation } from '../../../scoring-core/index.js';
 import { COHORT_COLORS, fmtDelta, fmtTokens } from '../theme.js';
 
-const AXIS = { stroke: '#64748b', fontSize: 11 };
+const AXIS = { stroke: 'var(--muted)', fontSize: 11 };
 
 interface Props {
   allocation: Allocation;
