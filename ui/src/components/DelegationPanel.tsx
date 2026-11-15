@@ -1,156 +1,169 @@
 import {
   COHORT_LABELS,
-  DEFAULT_DELEGATION,
+  nominationsCsv,
+  parseDelegation,
+  parseNominations,
   type CohortKey,
-  type DelegationConfig,
-  type DelegationResult,
+  type Delegation,
+  type Nomination,
+  type Outcome,
+  type Scenario,
 } from '../../../scoring-core/index.js';
 import { COHORT_COLORS, fmtTokens } from '../theme.js';
+import { ConfigFileBar } from './ConfigFileBar.js';
 import { NumberField, Toggle } from './Controls.js';
-import { DelegationPresetBar } from './DelegationPresetBar.js';
 
 interface Props {
-  config: DelegationConfig;
-  onChange: (next: DelegationConfig) => void;
-  onImport: (next: DelegationConfig) => void;
-  onReset: () => void;
-  result: DelegationResult;
+  scenario: Scenario;
+  production: Scenario;
+  onChange: (next: Scenario) => void;
+  outcome: Outcome;
+  /** The pool production read for the as-of. */
+  readPool: number;
+  /** Source kind → candidates with it. */
+  sourceCounts: Array<[string, number]>;
 }
 
-/** A compact numeric input for a table cell. */
-function NumCell({ value, onChange, min = 0, title }: {
-  value: number;
-  onChange: (v: number) => void;
-  min?: number;
-  title?: string;
-}) {
+function NumCell({ value, onChange, title }: { value: number; onChange: (v: number) => void; title?: string }) {
   return (
     <input
       className="cell-num"
       type="number"
-      min={min}
+      min={0}
       value={value}
       title={title}
       onChange={(e) => {
         const n = Number(e.target.value);
-        if (Number.isFinite(n)) onChange(Math.max(min, n));
+        if (Number.isFinite(n)) onChange(Math.max(0, n));
       }}
     />
   );
 }
 
+const SOURCE_LABELS: Record<string, string> = {
+  grandfathered: 'Grandfathered (Karma era)',
+  snapshot_voter: 'Snapshot voters',
+  snapshot_follower: 'Snapshot followers',
+  highsignal_ssv: 'HighSignal SSV users',
+  highsignal_eth: 'HighSignal ETH communities',
+  nomination: 'Nominated',
+};
+
 /**
- * Sidebar section driving the delegation impact simulation: the delegatable
- * lump sum and the cohort split/gating, laid out as an adjustable table so the
- * five cohorts read at a glance. Every setter makes a fresh object so the
- * leaderboard and breakdown recompute live, like the scoring parameters.
+ * Allocation levers: the pool, production's `config/delegation.json`, the
+ * nominations and which roster sources count.
  */
-export function DelegationPanel({ config, onChange, onImport, onReset, result }: Props) {
-  type Group = 'ssvCommunity' | 'verifiedOperators' | 'professional' | 'grantRecipients' | 'ethCommunities';
-  const set = <K extends Group>(key: K, patch: Partial<DelegationConfig[K]>) =>
-    onChange({ ...config, [key]: { ...config[key], ...patch } });
+export function DelegationPanel({ scenario, production, onChange, outcome, readPool, sourceCounts }: Props) {
+  const { delegation } = scenario;
+  const allocation = outcome.allocation;
+  const setDelegation = (next: Delegation) => onChange({ ...scenario, delegation: next });
+  const setCohort = (cohort: CohortKey, patch: { pct?: number; minMembers?: number }) =>
+    setDelegation({
+      ...delegation,
+      cohorts: { ...delegation.cohorts, [cohort]: { ...delegation.cohorts[cohort], ...patch } },
+    });
 
-  const sumPct =
-    config.ssvCommunity.pct +
-    config.verifiedOperators.pct +
-    config.professional.pct +
-    config.grantRecipients.pct +
-    config.ethCommunities.pct;
-
-  const gateOf = (cohort: CohortKey) => {
-    switch (cohort) {
-      case 'ssvCommunity':
-        return (
-          <NumCell
-            value={config.ssvCommunity.scoreThreshold}
-            onChange={(scoreThreshold) => set('ssvCommunity', { scoreThreshold })}
-            title="SSV Community: include entities scoring above this"
-          />
-        );
-      case 'verifiedOperators':
-        return <NumCell value={config.verifiedOperators.minMembers} onChange={(minMembers) => set('verifiedOperators', { minMembers })} title="Minimum nominations" />;
-      case 'professional':
-        return <NumCell value={config.professional.minMembers} onChange={(minMembers) => set('professional', { minMembers })} title="Minimum nominations" />;
-      case 'grantRecipients':
-        return <NumCell value={config.grantRecipients.minMembers} onChange={(minMembers) => set('grantRecipients', { minMembers })} title="Minimum nominations" />;
-      default:
-        return <span className="dim">—</span>;
-    }
+  const sumPct = Object.values(delegation.cohorts).reduce((s, c) => s + c.pct, 0);
+  const selectedSources = new Set(scenario.sources ?? sourceCounts.map(([s]) => s));
+  const toggleSource = (source: string) => {
+    const next = new Set(selectedSources);
+    if (next.has(source)) next.delete(source);
+    else next.add(source);
+    const all = sourceCounts.every(([s]) => next.has(s));
+    onChange({ ...scenario, sources: all ? null : [...next] });
   };
-
-  const pctOf = (cohort: CohortKey): number =>
-    (config[cohort as Group] as { pct: number }).pct;
+  const nominationsChanged = nominationKey(scenario.nominations) !== nominationKey(production.nominations);
 
   return (
     <div className="card">
-      <h2>Delegation impact</h2>
+      <h2>Allocation</h2>
 
       <div className="group">
-        <h3>Delegatable pool</h3>
-        <NumberField
-          label="Total SSV / cSSV (auto-delegation)"
-          value={config.totalDelegatable}
-          step={1000}
-          onChange={(totalDelegatable) => onChange({ ...config, totalDelegatable })}
-        />
-        <div className="hint">
-          The lump sum delegated to/by the DAO, split across cohorts regardless of source.
-        </div>
-
+        <h3>Pool</h3>
         <Toggle
-          label="Cap program voting power"
-          checked={config.powerCap !== null}
-          onChange={(on) =>
-            onChange({ ...config, powerCap: on ? (DEFAULT_DELEGATION.powerCap ?? 0) : null })
-          }
+          label={`Use the Safe's power production read (${fmtTokens(readPool)})`}
+          checked={scenario.pool === null}
+          onChange={(on) => onChange({ ...scenario, pool: on ? null : Math.round(readPool) })}
         />
-        {config.powerCap !== null && (
+        {scenario.pool !== null && (
           <NumberField
-            label="Cap (SSV-eq)"
-            value={config.powerCap}
+            label="Simulated pool (SSV-eq)"
+            value={scenario.pool}
             step={10_000}
-            onChange={(powerCap) => onChange({ ...config, powerCap })}
+            onChange={(pool) => onChange({ ...scenario, pool })}
           />
         )}
         <div className="hint">
-          {config.powerCap === null ? (
-            <>Uncapped — the program distributes every token delegated to it.</>
-          ) : result.voided > 0 ? (
-            <>
-              Distributing {fmtTokens(result.effective)}; {fmtTokens(result.voided)} above the cap is{' '}
-              <strong>voided</strong> — never assigned, never voted.
-            </>
-          ) : (
-            <>
-              Not binding: {fmtTokens(result.delegated)} delegated is within the{' '}
-              {fmtTokens(config.powerCap)} cap. Excess would be voided, not reserved.
-            </>
-          )}
+          The pool is not configured in production: each run reads the auto-delegation Safe&rsquo;s
+          delegatable power at the close of the as-of.
         </div>
+
+        <Toggle
+          label="Cap distributable power"
+          checked={delegation.cap !== null}
+          onChange={(on) => setDelegation({ ...delegation, cap: on ? (production.delegation.cap ?? 500_000) : null })}
+        />
+        {delegation.cap !== null && (
+          <NumberField
+            label="Cap (SSV-eq)"
+            value={delegation.cap}
+            step={10_000}
+            onChange={(cap) => setDelegation({ ...delegation, cap })}
+          />
+        )}
+        {allocation && (
+          <div className="hint">
+            {delegation.cap === null ? (
+              <>Uncapped — every delegated token is distributed.</>
+            ) : allocation.voided > 0 ? (
+              <>
+                Distributing {fmtTokens(allocation.effective)}; {fmtTokens(allocation.voided)} above the
+                cap is <strong>voided</strong>.
+              </>
+            ) : (
+              <>
+                Not binding: {fmtTokens(allocation.delegated)} is {fmtPct(allocation.delegated / delegation.cap)} of
+                the {fmtTokens(delegation.cap)} cap.
+              </>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="group">
-        <h3>Cohort split</h3>
+        <h3>Cohorts</h3>
+        <NumberField
+          label="SSV Community: score above"
+          value={delegation.scoreThreshold}
+          step={1}
+          onChange={(scoreThreshold) => setDelegation({ ...delegation, scoreThreshold })}
+        />
         <table className="cohort-table">
           <thead>
             <tr>
               <th className="left">Cohort</th>
               <th>Share %</th>
-              <th>Min / thr.</th>
-              <th>Members</th>
+              <th>Min</th>
+              <th>Seats</th>
             </tr>
           </thead>
           <tbody>
-            {result.cohorts.map((c) => (
+            {(allocation?.cohorts ?? []).map((c) => (
               <tr key={c.cohort}>
                 <td className="left">
-                  <span className="cohort-badge" style={{ background: COHORT_COLORS[c.cohort as CohortKey] }} />
-                  {COHORT_LABELS[c.cohort as CohortKey]}
+                  <span className="cohort-badge" style={{ background: COHORT_COLORS[c.cohort] }} />
+                  {COHORT_LABELS[c.cohort]}
                 </td>
                 <td>
-                  <NumCell value={pctOf(c.cohort)} onChange={(pct) => set(c.cohort as Group, { pct })} title="Share of the pool" />
+                  <NumCell value={delegation.cohorts[c.cohort].pct} onChange={(pct) => setCohort(c.cohort, { pct })} title="Share of the effective pool" />
                 </td>
-                <td>{gateOf(c.cohort)}</td>
+                <td>
+                  {c.minMembers === null ? (
+                    <span className="dim">—</span>
+                  ) : (
+                    <NumCell value={c.minMembers} onChange={(minMembers) => setCohort(c.cohort, { minMembers })} title="Minimum nominations" />
+                  )}
+                </td>
                 <td className={c.warning ? 'warn-text' : ''}>{c.memberCount}</td>
               </tr>
             ))}
@@ -158,27 +171,75 @@ export function DelegationPanel({ config, onChange, onImport, onReset, result }:
         </table>
         <div className="hint">
           Σ = {sumPct}%{' '}
-          {sumPct === 100
-            ? '— fully allocated.'
-            : sumPct < 100
-              ? `— ${100 - sumPct}% held in reserve.`
-              : `— over-allocated by ${sumPct - 100}%.`}{' '}
-          Per-member voting power. Assign entities from the leaderboard.
+          {sumPct === 100 ? '— fully allocated.' : sumPct < 100 ? `— ${100 - sumPct}% unallocated reserve.` : `— over-allocated by ${sumPct - 100}%.`}{' '}
+          One seat per identity; its highest-scoring qualifying address holds it.
+        </div>
+        <div style={{ marginTop: 10 }}>
+          <ConfigFileBar
+            filename="delegation.json"
+            text={() => JSON.stringify(delegation, null, 2)}
+            onImport={(content) => setDelegation(parseDelegation(content))}
+            onReset={() => setDelegation(production.delegation)}
+          />
         </div>
       </div>
 
-      {result.warnings.length > 0 && (
+      <div className="group">
+        <h3>Nominations</h3>
+        <div className="hint" style={{ marginTop: 0 }}>
+          {scenario.nominations.length} nominated addresses{nominationsChanged ? ' (changed from production)' : ''}.
+          Nominate from the leaderboard&rsquo;s cohort column. Opted-out addresses and auto-delegators
+          draw no seat whatever their nomination.
+        </div>
+        <div style={{ marginTop: 8 }}>
+          <ConfigFileBar
+            filename="nominations.csv"
+            text={() => nominationsCsv(scenario.nominations)}
+            onImport={(content) => onChange({ ...scenario, nominations: parseNominations(content) })}
+            onReset={() => onChange({ ...scenario, nominations: production.nominations })}
+          />
+        </div>
+      </div>
+
+      <div className="group">
+        <h3>Roster</h3>
+        {sourceCounts.length === 0 ? (
+          <div className="hint" style={{ marginTop: 0 }}>This dataset does not say why each address is a candidate.</div>
+        ) : (
+          <>
+            {sourceCounts.map(([source, count]) => (
+              <Toggle
+                key={source}
+                label={`${SOURCE_LABELS[source] ?? source} (${count})`}
+                checked={selectedSources.has(source)}
+                onChange={() => toggleSource(source)}
+              />
+            ))}
+            <div className="hint">
+              Production scores every candidate it has discovered. Narrowing the roster is an
+              eligibility change, which goes back to the DAO.
+            </div>
+          </>
+        )}
+      </div>
+
+      {outcome.error && <div className="warn-note">✖ {outcome.error}. Production would abort this run.</div>}
+      {allocation && allocation.warnings.length > 0 && (
         <div className="warn-note">
-          {result.warnings.map((w) => (
+          {allocation.warnings.map((w) => (
             <div key={w}>⚠ {w}</div>
           ))}
         </div>
       )}
-
-      <div className="group">
-        <h3>Delegation preset</h3>
-        <DelegationPresetBar delegation={config} onImport={onImport} onReset={onReset} />
-      </div>
     </div>
   );
+}
+
+const fmtPct = (x: number) => `${(100 * x).toFixed(0)}%`;
+
+export function nominationKey(nominations: readonly Nomination[]): string {
+  return nominations
+    .map((n) => `${n.address}:${n.cohort}`)
+    .sort()
+    .join(',');
 }

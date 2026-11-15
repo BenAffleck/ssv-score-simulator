@@ -48,3 +48,11 @@ export function fmtTokens(v: number | null | undefined): string {
   if (v >= 1_000) return `${(v / 1_000).toFixed(1)}k`;
   return v.toFixed(0);
 }
+
+/** A signed change, blank when there is none. `tokens` formats like `fmtTokens`. */
+export function fmtDelta(v: number | null | undefined, digits = 1, tokens = false): string {
+  if (v === null || v === undefined || !Number.isFinite(v)) return '';
+  if (Math.abs(v) < (tokens ? 0.5 : 0.5 * 10 ** -digits)) return '±0';
+  const sign = v > 0 ? '+' : '−';
+  return `${sign}${tokens ? fmtTokens(Math.abs(v)) : Math.abs(v).toFixed(digits)}`;
+}

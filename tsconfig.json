@@ -13,5 +13,5 @@
     "noEmit": true,
     "types": ["node"]
   },
-  "include": ["config.ts", "scoring-core/**/*", "collector/**/*", "ui/**/*", "vite.config.ts"]
+  "include": ["scoring-core/**/*", "importer/**/*", "ui/**/*", "vite.config.ts"]
 }

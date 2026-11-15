@@ -1,72 +1,107 @@
-/** Shared fixtures reproducing the proposal's worked example. */
-import { DAY_SECONDS, dateToTs } from '../dates.js';
-import type { BalanceRow, Dataset, ProposalRow } from '../types.js';
+/** Dataset builders for tests, mirroring production's test helpers. */
+import { addDays, DAY_SECONDS, endOfDay } from '../dates.js';
+import { toChangePoints } from '../dataset-io.js';
+import { DEFAULT_PARAMS, cloneParams } from '../params.js';
+import { prepare, type Prepared } from '../prepared.js';
+import { evaluate } from '../score.js';
+import {
+  DATASET_VERSION,
+  type CommunityObservation,
+  type Dataset,
+  type IdentityLink,
+  type Params,
+  type Proposal,
+  type Row,
+  type Vote,
+} from '../types.js';
 
 export const AS_OF = '2026-06-30';
+export const ALICE = '0x00000000000000000000000000000000000000a1';
+export const BOB = '0x00000000000000000000000000000000000000b0';
+export const CAROL = '0x00000000000000000000000000000000000000c0';
+export const CAROL_HOT = '0x00000000000000000000000000000000000000c1';
+export const DAVE = '0x00000000000000000000000000000000000000d0';
+export const WHALE = '0x00000000000000000000000000000000000000ff';
 
-/**
- * Five closed proposals spaced 30 days apart, newest first.
- *
- * The proposal states 4-of-5 (oldest missed, H=90) → 88 and cross-checks that
- * missing the *newest* instead gives ~70. 30-day spacing is the spacing that
- * satisfies both (88.05 and 69.88); the absolute anchor is irrelevant since a
- * uniform shift scales numerator and denominator alike.
- */
-export const PROPOSALS: ProposalRow[] = [0, 1, 2, 3, 4].map((i) => ({
-  id: `p${i}`,
-  title: `Proposal ${i}`,
-  endTs: dateToTs(AS_OF) - i * 30 * DAY_SECONDS,
-}));
-
-export const NEWEST = 'p0';
-export const OLDEST = 'p4';
-
-/** Alice voted on the latest 4 of 5 — she missed the oldest. */
-export const VOTED_LATEST_4 = new Set(['p0', 'p1', 'p2', 'p3']);
-/** Same count, but the most recent was skipped. */
-export const VOTED_OLDEST_4 = new Set(['p1', 'p2', 'p3', 'p4']);
-
-/**
- * A flat balance history totalling `total` per day, deliberately split across
- * both components so the sum proves cSSV is counted 1:1 with SSV.
- */
-export function flatBalances(address: string, total: number, days = 220): BalanceRow[] {
-  const rows: BalanceRow[] = [];
-  for (let i = 0; i < days; i++) {
-    rows.push({
-      address,
-      date: new Date((dateToTs(AS_OF) - i * DAY_SECONDS) * 1000).toISOString().slice(0, 10),
-      ssvErc20: total * 0.6,
-      cssv: total * 0.4,
-    });
-  }
-  return rows;
+export interface BalanceRow {
+  address: string;
+  date: string;
+  total: number;
 }
 
-/** Alice (TWAB 2,500) and Whale (TWAB 1,000,000), otherwise identical. */
-export function workedExampleDataset(): Dataset {
-  const alice = '0xAAaAaAaAaAaAaAaAaAaAaAaAaAaAaAaAaAaAaAaA';
-  const whale = '0xBbBbBbBbBbBbBbBbBbBbBbBbBbBbBbBbBbBbBbBb';
+/** `days` daily balance rows of `amount`, ending on `last`. */
+export function held(address: string, amount: number, days: number, last = AS_OF): BalanceRow[] {
+  return Array.from({ length: days }, (_, i) => ({ address, date: addDays(last, -i), total: amount }));
+}
 
+export function dataset(parts: {
+  roster: string[];
+  balances?: BalanceRow[];
+  proposals?: Proposal[];
+  votes?: Vote[];
+  community?: CommunityObservation[];
+  identities?: IdentityLink[];
+}): Dataset {
+  const balances = parts.balances ?? [];
   return {
-    generatedAt: new Date(0).toISOString(),
-    space: 'mainnet.ssvnetwork.eth',
-    dateRange: { start: '2025-11-22', end: AS_OF },
-    delegates: [
-      { address: alice, forumHandle: 'alice', discordUsername: 'alice#1', displayName: 'Alice' },
-      { address: whale, forumHandle: 'whale', discordUsername: 'whale#1', displayName: 'Whale' },
-    ],
-    balances: [...flatBalances(alice, 2_500), ...flatBalances(whale, 1_000_000)],
-    proposals: PROPOSALS,
-    votes: [
-      ...[...VOTED_LATEST_4].map((id) => ({ address: alice, proposalId: id, voted: 1 as const })),
-      { address: alice, proposalId: OLDEST, voted: 0 as const },
-      ...[...VOTED_LATEST_4].map((id) => ({ address: whale, proposalId: id, voted: 1 as const })),
-      { address: whale, proposalId: OLDEST, voted: 0 as const },
-    ],
-    highsignal: [
-      { address: alice, date: AS_OF, score: 82, hsUsername: 'alice', hsRank: 4 },
-      { address: whale, date: AS_OF, score: 82, hsUsername: 'whale', hsRank: 5 },
-    ],
+    version: DATASET_VERSION,
+    generatedAt: '2026-07-01T00:00:00.000Z',
+    origin: 'test',
+    space: 'test',
+    dateRange: { start: AS_OF, end: AS_OF },
+    roster: parts.roster.map((address) => ({
+      address,
+      displayName: address,
+      sources: [],
+      forumHandle: null,
+      discordHandle: null,
+      ensName: null,
+    })),
+    proposals: parts.proposals ?? [],
+    votes: parts.votes ?? [],
+    community: parts.community ?? [],
+    balanceDates: [...new Set(balances.map((b) => b.date))].sort(),
+    balances: toChangePoints(balances),
+    identities: parts.identities ?? [],
+    nominations: [],
+    ethCommunity: [],
+    optedOut: [],
+    safeDelegators: [],
+    pools: [],
+    production: null,
   };
+}
+
+export function params(patch: (p: Params) => void = () => {}): Params {
+  const p = cloneParams(DEFAULT_PARAMS);
+  patch(p);
+  return p;
+}
+
+export function score(d: Dataset | Prepared, p: Params = params(), asOf = AS_OF): Row[] {
+  return evaluate('dataset' in d ? d : prepare(d), p, asOf);
+}
+
+export function row(rows: Row[], address: string): Row {
+  const found = rows.find((r) => r.address === address);
+  if (!found) throw new Error(`no row for ${address}`);
+  return found;
+}
+
+/** `count` proposals `spacingDays` apart, the newest closing an hour before the as-of ends. */
+export function proposals(count: number, spacingDays = 30, asOf = AS_OF): Proposal[] {
+  return Array.from({ length: count }, (_, i) => ({
+    id: `p${i}`,
+    title: `P${i}`,
+    end: endOfDay(asOf) - 3600 - i * spacingDays * DAY_SECONDS,
+  }));
+}
+
+/** `voter` voted on each of `on`, just before it closed. */
+export function voted(voter: string, on: Proposal[]): Vote[] {
+  return on.map((p) => ({ proposalId: p.id, voter, created: p.end - 1 }));
+}
+
+export function observed(address: string, score: number, date = AS_OF): CommunityObservation {
+  return { address, date, score, hsUsername: null, hsRank: null };
 }

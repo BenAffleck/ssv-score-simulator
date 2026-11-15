@@ -6,3 +6,5 @@ data/sim.sqlite-journal
 data/dataset.json
 .cache/
 *.log
+data/demo-dataset.json
+.playwright-mcp/

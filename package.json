@@ -3,27 +3,23 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Delegate Score Simulation Engine \u2014 collect, recompute and calibrate the three-pillar SSV Delegate Score",
+  "description": "Delegate Score Simulator \u2014 re-runs the production Delegate Score pipeline on production data with any lever changed",
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
-    "collect": "tsx collector/build-dataset.ts",
-    "collect:balances": "tsx collector/collect-balances.ts",
-    "collect:votes": "tsx collector/collect-votes.ts",
-    "seed:demo": "tsx collector/seed-demo.ts",
+    "import": "tsx importer/import.ts",
+    "parity": "tsx importer/parity.ts",
+    "seed:demo": "tsx importer/seed-demo.ts",
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit",
-    "doctor": "tsx collector/doctor.ts"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "better-sqlite3": "^11.7.0",
-    "dotenv": "^16.4.7",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "recharts": "^2.15.0",
-    "viem": "^2.21.58"
+    "recharts": "^2.15.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.12",

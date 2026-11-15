@@ -7,7 +7,7 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   test: {
     root: '.',
-    include: ['scoring-core/**/*.test.ts', 'collector/**/*.test.ts'],
+    include: ['scoring-core/**/*.test.ts', 'importer/**/*.test.ts'],
     environment: 'node',
   },
 });

@@ -164,7 +164,7 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-.field .hint {
+.hint {
   font-size: 11px;
   color: var(--dim);
   margin-top: 3px;
@@ -701,3 +701,24 @@ button.link:disabled { color: var(--dim); cursor: default; text-decoration: none
 }
 .page-nav button:hover:not(:disabled) { border-color: var(--accent-dim); }
 .page-nav button:disabled { opacity: 0.35; cursor: default; }
+
+/* Scenario vs production */
+.delta { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.delta.up { color: var(--good); }
+.delta.down { color: #f07a9c; }
+.flag-chip {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 5px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  font-size: 10px;
+  color: var(--muted);
+  vertical-align: 1px;
+}
+.flag-chip.warn { color: var(--warn); border-color: #6b5a24; }
+.parity { font-size: 12px; }
+.parity.ok { color: var(--good); }
+.parity.off { color: var(--warn); }
+.scenario-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.scenario-bar .changes { color: var(--muted); font-size: 12px; }

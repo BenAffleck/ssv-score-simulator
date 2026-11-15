@@ -69,7 +69,7 @@ export function DatasetGate({ importFile, notice }: { importFile: Import; notice
       <div className={`dropzone${dragging ? ' dragging' : ''}`} {...dropProps}>
         <h1>Delegate Score Simulator</h1>
         <p className="lede">
-          Drop a <code>dataset.json</code> here to start, or{' '}
+          Drop a <code>dataset.json</code> or a production run export here to start, or{' '}
           <button className="link" onClick={browse} disabled={busy}>
             choose a file
           </button>
@@ -82,12 +82,15 @@ export function DatasetGate({ importFile, notice }: { importFile: Import; notice
 
         <div className="gate-note">
           <p>
-            The simulator scores a roster from a dataset collected off-chain. It runs entirely in
-            your browser — nothing is uploaded, and the file stays on this device.
+            The simulator re-runs the production Delegate Score pipeline on production&rsquo;s own
+            data, with any lever changed. It runs entirely in your browser — nothing is uploaded, and
+            the file stays on this device.
           </p>
           <p>
-            Someone on the team generates one with <code>npm run collect</code> and shares the
-            resulting <code>data/dataset.json</code>. It is remembered here until you clear it.
+            Whoever has the production database generates one with <code>npm run import</code> and
+            shares <code>data/dataset.json</code>. A single run&rsquo;s{' '}
+            <code>ssv-score export-dataset</code> file works too, for that one as-of. It is
+            remembered here until you clear it.
           </p>
         </div>
       </div>

@@ -11,7 +11,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import type { LeaderboardRow } from '../../../scoring-core/index.js';
+import type { Row } from '../../../scoring-core/index.js';
 import { PILLAR_COLORS, PILLAR_LABELS, fmtScore } from '../theme.js';
 
 const AXIS = { stroke: '#64748b', fontSize: 11 };
@@ -54,7 +54,7 @@ function ChartTooltip({ active, label, payload, suffix = '' }: {
 
 interface ScoreChartProps {
   data: Array<Record<string, string | number | null>>;
-  rows: LeaderboardRow[];
+  rows: Row[];
   colors: Map<string, string>;
   asOf: string;
   selected: string | null;
@@ -93,7 +93,7 @@ export function ScoreChart({ data, rows, colors, asOf, selected, onSelect }: Sco
               <Line
                 key={r.address}
                 type="monotone"
-                dataKey={r.address.toLowerCase()}
+                dataKey={r.address}
                 name={r.displayName}
                 stroke={colors.get(r.address)}
                 strokeWidth={isSel ? 2.6 : 1.4}
@@ -130,7 +130,7 @@ export function ScoreChart({ data, rows, colors, asOf, selected, onSelect }: Sco
 
 interface PillarChartProps {
   data: Array<Record<string, string | number | null>>;
-  delegate: LeaderboardRow | null;
+  delegate: Row | null;
   asOf: string;
 }
 

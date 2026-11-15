@@ -1,51 +1,42 @@
 import { Bar, BarChart, Cell, ResponsiveContainer, XAxis, YAxis } from 'recharts';
-import {
-  COHORT_LABELS,
-  type CohortKey,
-  type DelegationResult,
-} from '../../../scoring-core/index.js';
-import { COHORT_COLORS, fmtTokens } from '../theme.js';
+import { COHORT_LABELS, type Allocation } from '../../../scoring-core/index.js';
+import { COHORT_COLORS, fmtDelta, fmtTokens } from '../theme.js';
 
 const AXIS = { stroke: '#64748b', fontSize: 11 };
 
 interface Props {
-  result: DelegationResult;
+  allocation: Allocation;
+  /** Production's allocation at the same as-of, to compare against. */
+  baseline: Allocation | null;
 }
 
-/**
- * Breakdown of delegation power by cohort: budget, member count, per-member
- * power and min-member status, alongside a bar of each cohort's budget. Makes
- * the source of every entity's power auditable at a glance.
- */
-export function DelegationBreakdown({ result }: Props) {
-  const data = result.cohorts.map((c) => ({
-    key: c.cohort,
-    label: COHORT_LABELS[c.cohort as CohortKey],
-    budget: Math.round(c.budget),
-  }));
+/** Each cohort's budget, seats and per-seat power, against production's. */
+export function DelegationBreakdown({ allocation, baseline }: Props) {
+  const data = allocation.cohorts.map((c) => ({ key: c.cohort, label: COHORT_LABELS[c.cohort], budget: Math.round(c.budget) }));
+  const before = new Map(baseline?.cohorts.map((c) => [c.cohort, c]) ?? []);
 
   return (
     <div className="card">
       <div className="chart-head">
-        <h2>Delegation breakdown</h2>
+        <h2>Allocation</h2>
         <span className="chart-note">
-          {fmtTokens(result.delegated)} delegated ·{' '}
-          {result.voided > 0 && (
+          {fmtTokens(allocation.delegated)} pool ·{' '}
+          {allocation.voided > 0 && (
             <>
-              <span className="warn-text">{fmtTokens(result.voided)} voided (cap)</span> ·{' '}
+              <span className="warn-text">{fmtTokens(allocation.voided)} voided (cap)</span> ·{' '}
             </>
           )}
-          {fmtTokens(result.effective)} distributable · {fmtTokens(result.unallocated)} unallocated
+          {fmtTokens(allocation.effective)} distributable · {fmtTokens(allocation.unallocated)} unallocated
         </span>
       </div>
 
-      <ResponsiveContainer width="100%" height={190}>
+      <ResponsiveContainer width="100%" height={170}>
         <BarChart data={data} layout="vertical" margin={{ left: 8, right: 16, top: 4, bottom: 4 }}>
           <XAxis type="number" tick={AXIS} tickFormatter={(v) => fmtTokens(v)} axisLine={false} tickLine={false} />
-          <YAxis type="category" dataKey="label" tick={AXIS} width={120} axisLine={false} tickLine={false} />
+          <YAxis type="category" dataKey="label" tick={AXIS} width={130} axisLine={false} tickLine={false} />
           <Bar dataKey="budget" radius={[0, 3, 3, 0]}>
             {data.map((d) => (
-              <Cell key={d.key} fill={COHORT_COLORS[d.key as CohortKey]} />
+              <Cell key={d.key} fill={COHORT_COLORS[d.key]} />
             ))}
           </Bar>
         </BarChart>
@@ -56,28 +47,36 @@ export function DelegationBreakdown({ result }: Props) {
           <tr>
             <th className="left">Cohort</th>
             <th>Share</th>
-            <th>Voting Power</th>
-            <th>Members</th>
-            <th>Per member</th>
+            <th>Budget</th>
+            <th>Seats</th>
+            <th>Per seat</th>
+            <th>vs production</th>
             <th className="left">Status</th>
           </tr>
         </thead>
         <tbody>
-          {result.cohorts.map((c) => (
-            <tr key={c.cohort}>
-              <td className="left">
-                <span className="cohort-badge" style={{ background: COHORT_COLORS[c.cohort as CohortKey] }} />
-                {COHORT_LABELS[c.cohort as CohortKey]}
-              </td>
-              <td>{c.pct}%</td>
-              <td>{fmtTokens(c.budget)}</td>
-              <td>{c.memberCount}</td>
-              <td>{fmtTokens(c.perMember)}</td>
-              <td className={`left ${c.warning ? 'warn-text' : ''}`}>
-                {c.warning ? `below min (${c.minMembers})` : c.minMembers ? 'ok' : '—'}
-              </td>
-            </tr>
-          ))}
+          {allocation.cohorts.map((c) => {
+            const b = before.get(c.cohort);
+            return (
+              <tr key={c.cohort}>
+                <td className="left">
+                  <span className="cohort-badge" style={{ background: COHORT_COLORS[c.cohort] }} />
+                  {COHORT_LABELS[c.cohort]}
+                </td>
+                <td>{c.pct}%</td>
+                <td>{fmtTokens(c.budget)}</td>
+                <td>
+                  {c.memberCount}
+                  {b && b.memberCount !== c.memberCount && <span className="delta"> ({fmtDelta(c.memberCount - b.memberCount, 0)})</span>}
+                </td>
+                <td>{fmtTokens(c.perMember)}</td>
+                <td>{b && Math.abs(c.perMember - b.perMember) >= 0.5 ? <span className="delta">{fmtDelta(c.perMember - b.perMember, 0, true)}</span> : ""}</td>
+                <td className={`left ${c.warning ? 'warn-text' : ''}`}>
+                  {c.warning ? `below min (${c.minMembers})` : c.minMembers !== null ? 'ok' : '—'}
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>

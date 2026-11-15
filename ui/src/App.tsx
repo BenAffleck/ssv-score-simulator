@@ -1,61 +1,54 @@
 import { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import {
-  DEFAULT_PARAMS,
-  cloneDelegation,
-  clonePolicy,
-  computeDelegation,
   dateRange,
-  indexDataset,
-  parseDelegationPreset,
+  delegationEqual,
+  evaluate,
+  paramsEqual,
+  poolAt,
+  prepare,
+  productionScenario,
+  rosterFilter,
   round2,
-  simulate,
-  type DelegationConfig,
-  type CohortKey,
-  type IdentityRow,
-  type LeaderboardRow,
-  type ScoringParams,
+  runScenario,
+  sourceKind,
+  type Dataset,
+  type NominatedCohort,
+  type Row,
+  type Scenario,
 } from '../../scoring-core/index.js';
-import delegationDefault from '../../data/delegation-default.json';
-import { loadDelegationConfig, saveDelegationConfig } from './configStore.js';
+import { loadScenario, saveScenario } from './configStore.js';
+import { PillarChart, ScoreChart } from './components/Charts.js';
 import { DatasetBadge, DatasetGate } from './components/DatasetImport.js';
+import { DelegateCard } from './components/DelegateCard.js';
 import { DelegationBreakdown } from './components/DelegationBreakdown.js';
-import { DelegationPanel } from './components/DelegationPanel.js';
-import { IdentityCard } from './components/IdentityCard.js';
+import { DelegationPanel, nominationKey } from './components/DelegationPanel.js';
 import {
   DEFAULT_FILTER,
   Leaderboard,
+  changed,
   filterRows,
+  type Before,
+  type Context,
   type LeaderboardFilter,
+  type RowMeta,
 } from './components/Leaderboard.js';
 import { ParamPanel } from './components/ParamPanel.js';
-import { PillarChart, ScoreChart } from './components/Charts.js';
-import { colorFor, fmtScore } from './theme.js';
+import { colorFor, fmtScore, fmtTokens } from './theme.js';
 import { useDataset, type DatasetSource } from './useDataset.js';
 
 /** Keep the time-series charts to ~90 points regardless of range length. */
 const MAX_POINTS = 90;
-
-/** Resizable-sidebar bounds, in px. */
+/** Lines on the score chart: the top visible rows, plus the selected one. */
+const CHART_LINES = 12;
 const SIDEBAR_MIN = 300;
 const SIDEBAR_MAX = 680;
 
-/**
- * The shipped default delegation setup, read from an exported-format preset
- * file (data/delegation-default.json) rather than hardcoded — first-time users
- * get the ratified cohort split and the guaranteed-delegation assignments.
- */
-const SEED_DELEGATION = parseDelegationPreset(delegationDefault);
-
 export function App() {
   const { state, importFile, reset } = useDataset();
-
   if (state.status === 'loading') return <div className="loading">Loading dataset…</div>;
   if (state.status === 'empty') return <DatasetGate importFile={importFile} notice={state.notice} />;
-
   return (
     <Simulator
-      // Remount on a dataset swap: the scrubber position and selected delegate
-      // are indices into the OLD dataset and mean nothing in the new one.
       key={`${state.source.kind}:${state.dataset.generatedAt}`}
       dataset={state.dataset}
       source={state.source}
@@ -71,49 +64,43 @@ function Simulator({
   importFile,
   onReset,
 }: {
-  dataset: import('../../scoring-core/index.js').Dataset;
+  dataset: Dataset;
   source: DatasetSource;
   importFile: (file: File) => Promise<void>;
   onReset: () => void;
 }) {
-  const [params, setParams] = useState<ScoringParams>(() => clonePolicy(DEFAULT_PARAMS));
-  const [delegation, setDelegationState] = useState<DelegationConfig>(() =>
-    cloneDelegation(SEED_DELEGATION),
-  );
+  const production = useMemo(() => productionScenario(dataset), [dataset]);
+  const [scenario, setScenarioState] = useState<Scenario>(production);
   const [selected, setSelected] = useState<string | null>(null);
   const [filter, setFilter] = useState<LeaderboardFilter>(DEFAULT_FILTER);
-
-  // Sidebar width is resizable and collapsible; both persist across reloads.
   const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
-    const v = Number(localStorage.getItem('sidebarWidth'));
-    return Number.isFinite(v) && v >= SIDEBAR_MIN ? Math.min(SIDEBAR_MAX, v) : 380;
+    const v = Number(safeGet('sidebarWidth'));
+    return Number.isFinite(v) && v >= SIDEBAR_MIN ? Math.min(SIDEBAR_MAX, v) : 400;
   });
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(
-    () => localStorage.getItem('sidebarCollapsed') === '1',
-  );
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => safeGet('sidebarCollapsed') === '1');
+  useEffect(() => safeSet('sidebarWidth', String(sidebarWidth)), [sidebarWidth]);
+  useEffect(() => safeSet('sidebarCollapsed', sidebarCollapsed ? '1' : '0'), [sidebarCollapsed]);
+
   useEffect(() => {
-    try {
-      localStorage.setItem('sidebarWidth', String(sidebarWidth));
-    } catch {
-      /* storage blocked — width just won't persist */
-    }
-  }, [sidebarWidth]);
-  useEffect(() => {
-    try {
-      localStorage.setItem('sidebarCollapsed', sidebarCollapsed ? '1' : '0');
-    } catch {
-      /* storage blocked */
-    }
-  }, [sidebarCollapsed]);
+    let live = true;
+    void loadScenario(dataset.origin).then((stored) => {
+      if (live && stored) setScenarioState(stored);
+    });
+    return () => {
+      live = false;
+    };
+  }, [dataset.origin]);
+  const setScenario = (next: Scenario) => {
+    setScenarioState(next);
+    void saveScenario(dataset.origin, next);
+  };
 
   const startResize = (e: React.MouseEvent) => {
     e.preventDefault();
     const startX = e.clientX;
     const startW = sidebarWidth;
-    const onMove = (ev: MouseEvent) => {
-      const w = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, startW + (ev.clientX - startX)));
-      setSidebarWidth(w);
-    };
+    const onMove = (ev: MouseEvent) =>
+      setSidebarWidth(Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, startW + (ev.clientX - startX))));
     const onUp = () => {
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
@@ -124,79 +111,99 @@ function Simulator({
     document.body.style.userSelect = 'none';
   };
 
-  // Hydrate the delegation config from IndexedDB once, then persist on change.
-  useEffect(() => {
-    let live = true;
-    void loadDelegationConfig().then((stored) => {
-      if (live && stored) setDelegationState(stored);
-    });
-    return () => {
-      live = false;
-    };
-  }, []);
-
-  const setDelegation = (next: DelegationConfig) => {
-    setDelegationState(next);
-    void saveDelegationConfig(next);
-  };
-
-  const assignCohort = (address: string, cohort: CohortKey | null) => {
-    const key = address.toLowerCase();
-    const assignments = { ...delegation.assignments };
-    if (cohort) assignments[key] = cohort;
-    else delete assignments[key];
-    setDelegation({ ...delegation, assignments });
-  };
-
-  const index = useMemo(() => indexDataset(dataset), [dataset]);
-
-  const allDates = useMemo(
-    () => dateRange(dataset.dateRange.start, dataset.dateRange.end),
-    [dataset.dateRange.start, dataset.dateRange.end],
-  );
-
-  // As-of defaults to the most recent collected day.
-  const [asOfIndex, setAsOfIndex] = useState(allDates.length - 1);
+  const prepared = useMemo(() => prepare(dataset), [dataset]);
+  const allDates = useMemo(() => dateRange(dataset.dateRange.start, dataset.dateRange.end), [dataset.dateRange]);
+  // Opens on production's run as-of, so the first screen is the published leaderboard.
+  const [asOfIndex, setAsOfIndex] = useState(() => {
+    const i = dataset.production ? allDates.indexOf(dataset.production.asOf) : -1;
+    return i >= 0 ? i : allDates.length - 1;
+  });
   const asOf = allDates[Math.min(asOfIndex, allDates.length - 1)] ?? dataset.dateRange.end;
 
-  // Every score below flows from these three memos — change a parameter and
-  // the whole page recomputes in-browser, with no reload and no server call.
-  const rows = useMemo(() => simulate(index, params, asOf), [index, params, asOf]);
+  const outcome = useMemo(() => runScenario(prepared, scenario, asOf), [prepared, scenario, asOf]);
+  const baseline = useMemo(() => runScenario(prepared, production, asOf), [prepared, production, asOf]);
 
-  const delegationResult = useMemo(
-    () => computeDelegation(rows, delegation, dataset.ethCommunities ?? []),
-    [rows, delegation, dataset.ethCommunities],
-  );
-
-  const identityByAddress = useMemo(() => {
-    const map = new Map<string, IdentityRow>();
-    for (const id of dataset.identities ?? []) map.set(id.address.toLowerCase(), id);
+  const before = useMemo(() => {
+    const map = new Map<string, Before>();
+    for (const r of baseline.rows) {
+      map.set(r.address, {
+        rank: r.rank,
+        score: r.score,
+        cohort: baseline.allocation?.members.get(r.address) ?? null,
+        power: baseline.allocation?.power.get(r.address) ?? 0,
+      });
+    }
     return map;
-  }, [dataset.identities]);
+  }, [baseline]);
 
-  const rosterAddresses = useMemo(
-    () => new Set(dataset.delegates.map((d) => d.address.toLowerCase())),
-    [dataset.delegates],
-  );
+  const ctx: Context = useMemo(() => {
+    const meta = new Map<string, RowMeta>();
+    const counts = new Map<string, number>();
+    for (const identity of outcome.identities.values()) counts.set(identity.id, (counts.get(identity.id) ?? 0) + 1);
+    const optedOut = new Set(dataset.optedOut);
+    const auto = new Set(dataset.safeDelegators);
+    const eth = new Set(dataset.ethCommunity);
+    for (const c of dataset.roster) {
+      const identity = outcome.identities.get(c.address);
+      if (!identity) continue;
+      meta.set(c.address, {
+        identity: identity.id,
+        siblings: (counts.get(identity.id) ?? 1) - 1,
+        hsUsername: identity.hsUsername,
+        forumHandle: c.forumHandle,
+        ensName: c.ensName,
+        optedOut: optedOut.has(c.address),
+        autoDelegator: auto.has(c.address),
+        ethCommunity: eth.has(c.address),
+      });
+    }
+    return {
+      outcome,
+      before,
+      meta,
+      nominations: new Map(scenario.nominations.map((n) => [n.address, n.cohort])),
+    };
+  }, [outcome, before, dataset, scenario.nominations]);
 
-  // One filtered set drives both the leaderboard and the DelegateScore chart.
-  const visibleRows = useMemo(
-    () => filterRows(rows, filter, delegationResult),
-    [rows, filter, delegationResult],
-  );
+  const members = useMemo(() => {
+    const map = new Map<string, string[]>();
+    for (const [address, identity] of outcome.identities) map.set(identity.id, [...(map.get(identity.id) ?? []), address]);
+    return map;
+  }, [outcome.identities]);
+  const candidates = useMemo(() => new Map(dataset.roster.map((c) => [c.address, c])), [dataset.roster]);
+  const sourceCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const c of dataset.roster) for (const kind of new Set(c.sources.map(sourceKind))) counts.set(kind, (counts.get(kind) ?? 0) + 1);
+    return [...counts].sort((a, b) => b[1] - a[1]);
+  }, [dataset.roster]);
 
-  // The time-series charts run ~90 simulate() passes; deferring their inputs
-  // lets the leaderboard (which uses live params) repaint instantly while the
-  // charts catch up a frame later, so dragging a slider never stalls.
-  const deferredParams = useDeferredValue(params);
+  const visibleRows = useMemo(() => filterRows(outcome.rows, filter, ctx), [outcome.rows, filter, ctx]);
+  const changedCount = useMemo(() => outcome.rows.filter((r) => changed(ctx, r)).length, [outcome.rows, ctx]);
+
+  const parity = useMemo(() => {
+    const run = dataset.production;
+    if (!run || run.rows.length === 0 || asOf !== run.asOf) return null;
+    const ours = new Map(baseline.rows.map((r) => [r.address, r]));
+    let matching = 0;
+    for (const p of run.rows) {
+      const r = ours.get(p.address);
+      const seat = baseline.allocation?.members.get(p.address) ?? null;
+      if (r && r.rank === p.rank && near(r.score, p.score) && seat === p.cohort && near(baseline.allocation?.power.get(p.address) ?? 0, p.power)) matching++;
+    }
+    return { matching, total: run.rows.length, runId: run.runId };
+  }, [dataset.production, baseline, asOf]);
+
+  const edits = describeEdits(scenario, production);
+
+  const toggleNomination = (address: string, cohort: NominatedCohort | null) => {
+    const rest = scenario.nominations.filter((n) => n.address !== address);
+    setScenario({ ...scenario, nominations: cohort ? [...rest, { address, cohort }] : rest });
+  };
+
+  // Charts recompute the scenario at ~90 dates; deferring keeps the table responsive while dragging.
+  const deferredParams = useDeferredValue(scenario.params);
+  const deferredSources = useDeferredValue(scenario.sources);
   const deferredSelected = useDeferredValue(selected);
-  // pillarData reads `rows` only to pick a fallback target delegate. `rows` is a
-  // fresh array on every parameter change, so depending on it directly would run
-  // the memo's ~90 simulate() passes on the *urgent* render and stall the
-  // leaderboard. Deferring it keeps that work at the same low priority as the
-  // rest of the chart, so the table repaints first.
-  const deferredRows = useDeferredValue(rows);
-
   const chartDates = useMemo(() => {
     const step = Math.max(1, Math.ceil(allDates.length / MAX_POINTS));
     const sampled = allDates.filter((_, i) => i % step === 0);
@@ -204,115 +211,113 @@ function Simulator({
     if (last && sampled.at(-1) !== last) sampled.push(last);
     return sampled;
   }, [allDates]);
+  const series = useMemo(() => {
+    const include = rosterFilter(prepared, deferredSources);
+    return chartDates.map((date) => ({ date, rows: evaluate(prepared, deferredParams, date, include) }));
+  }, [prepared, deferredParams, deferredSources, chartDates]);
 
+  const selectedRow: Row | null = outcome.rows.find((r) => r.address === selected) ?? visibleRows[0] ?? null;
+  const chartRows = useMemo(() => {
+    const top = visibleRows.slice(0, CHART_LINES);
+    const sel = visibleRows.find((r) => r.address === deferredSelected);
+    return sel && !top.includes(sel) ? [...top, sel] : top;
+  }, [visibleRows, deferredSelected]);
   const scoreData = useMemo(
     () =>
-      chartDates.map((date) => {
+      series.map(({ date, rows }) => {
         const point: Record<string, string | number | null> = { date };
-        for (const r of simulate(index, deferredParams, date)) {
-          point[r.address.toLowerCase()] = r.score === null ? null : round2(r.score);
-        }
+        const wanted = new Set(chartRows.map((r) => r.address));
+        for (const r of rows) if (wanted.has(r.address)) point[r.address] = r.score === null ? null : round2(r.score);
         return point;
       }),
-    [index, deferredParams, chartDates],
+    [series, chartRows],
   );
-
-  const selectedRow: LeaderboardRow | null =
-    rows.find((r) => r.address === selected) ?? rows[0] ?? null;
-
-  // Weighted contribution of each pillar: wᵢ·Sᵢ / Σw, so the stack sums to the score.
   const pillarData = useMemo(() => {
-    const target =
-      deferredRows.find((r) => r.address === deferredSelected)?.address.toLowerCase() ??
-      deferredRows[0]?.address.toLowerCase();
+    const target = selectedRow?.address;
     if (!target) return [];
-    return chartDates.map((date) => {
-      const row = simulate(index, deferredParams, date).find((r) => r.address.toLowerCase() === target);
+    const w = deferredParams.weights;
+    return series.map(({ date, rows }) => {
+      const r = rows.find((x) => x.address === target);
       const point: Record<string, string | number | null> = { date };
       let den = 0;
+      for (const k of ['community', 'holdings', 'votes'] as const) if (r && r[k] !== null && w[k] > 0) den += w[k];
       for (const k of ['community', 'holdings', 'votes'] as const) {
-        if (row && row.pillars[k] !== null && deferredParams.weights[k] > 0) den += deferredParams.weights[k];
-      }
-      for (const k of ['community', 'holdings', 'votes'] as const) {
-        const s = row?.pillars[k] ?? null;
-        point[k] = s === null || den <= 0 ? 0 : round2((deferredParams.weights[k] * s) / den);
+        const s = r?.[k] ?? null;
+        point[k] = s === null || den <= 0 ? 0 : round2((w[k] * s) / den);
       }
       return point;
     });
-  }, [index, deferredParams, chartDates, deferredSelected, deferredRows]);
+  }, [series, selectedRow?.address, deferredParams.weights]);
 
   const colors = useMemo(() => {
     const map = new Map<string, string>();
-    dataset.delegates.forEach((d, i) => map.set(d.address, colorFor(i)));
+    dataset.roster.forEach((c, i) => map.set(c.address, colorFor(i)));
     return map;
-  }, [dataset.delegates]);
+  }, [dataset.roster]);
 
-  // Surfaced because a backfill shorter than T is otherwise invisible and
-  // would quietly understate every delegate's holdings.
-  const twabDays = Math.max(0, ...rows.map((r) => r.raw.twabDays));
-  const twabTruncated = twabDays > 0 && twabDays < params.holdings.windowDays ? twabDays : null;
-
-  const scored = rows.filter((r) => r.score !== null);
-  const avg = scored.length ? scored.reduce((s, r) => s + (r.score ?? 0), 0) / scored.length : null;
+  const twabDays = Math.max(0, ...outcome.rows.map((r) => r.twabDays ?? 0));
+  const twabTruncated = twabDays > 0 && twabDays < scenario.params.holdings.windowDays ? twabDays : null;
+  const seats = outcome.allocation?.cohorts.reduce((s, c) => s + c.memberCount, 0) ?? 0;
 
   return (
-    <div
-      className="app"
-      style={{
-        gridTemplateColumns: sidebarCollapsed ? '0 minmax(0, 1fr)' : `${sidebarWidth}px minmax(0, 1fr)`,
-      }}
-    >
+    <div className="app" style={{ gridTemplateColumns: sidebarCollapsed ? '0 minmax(0, 1fr)' : `${sidebarWidth}px minmax(0, 1fr)` }}>
       <header className="header">
-        <button
-          className="sidebar-toggle"
-          onClick={() => setSidebarCollapsed((c) => !c)}
-          title={sidebarCollapsed ? 'Show parameters panel' : 'Hide parameters panel'}
-        >
+        <button className="sidebar-toggle" onClick={() => setSidebarCollapsed((c) => !c)} title={sidebarCollapsed ? 'Show levers' : 'Hide levers'}>
           {sidebarCollapsed ? '»' : '«'}
         </button>
         <h1>Delegate Score Simulator</h1>
         <span className="sub">{dataset.space}</span>
-        <span className="pill">{dataset.delegates.length} delegates</span>
-        <span className="pill">
-          {dataset.dateRange.start} → {dataset.dateRange.end}
-        </span>
+        <span className="pill">{dataset.roster.length} candidates</span>
         <span className="pill">{dataset.proposals.length} proposals</span>
+        {dataset.production && (
+          <span className="pill" title={`production code ${dataset.production.codeVersion}`}>
+            production run #{dataset.production.runId} · {dataset.production.asOf}
+          </span>
+        )}
         <span style={{ marginLeft: 'auto' }} className="sub">
-          collected {dataset.generatedAt.slice(0, 10)}
+          imported {dataset.generatedAt.slice(0, 10)}
         </span>
-        <DatasetBadge
-          dataset={dataset}
-          source={source}
-          importFile={importFile}
-          onReset={onReset}
-        />
+        <DatasetBadge dataset={dataset} source={source} importFile={importFile} onReset={onReset} />
       </header>
 
       {!sidebarCollapsed && (
         <aside className="sidebar">
-          <ParamPanel
-            params={params}
-            onChange={setParams}
-            onReset={() => setParams(clonePolicy(DEFAULT_PARAMS))}
-          />
+          <ParamPanel params={scenario.params} production={production.params} onChange={(params) => setScenario({ ...scenario, params })} />
           <DelegationPanel
-            config={delegation}
-            onChange={setDelegation}
-            onImport={setDelegation}
-            onReset={() => setDelegation(cloneDelegation(SEED_DELEGATION))}
-            result={delegationResult}
+            scenario={scenario}
+            production={production}
+            onChange={setScenario}
+            outcome={outcome}
+            readPool={poolAt(dataset, asOf)}
+            sourceCounts={sourceCounts}
           />
-          <div
-            className="sidebar-resizer"
-            onMouseDown={startResize}
-            title="Drag to resize"
-            role="separator"
-            aria-orientation="vertical"
-          />
+          <div className="sidebar-resizer" onMouseDown={startResize} title="Drag to resize" role="separator" aria-orientation="vertical" />
         </aside>
       )}
 
       <main className="main">
+        <div className="card">
+          <div className="scenario-bar">
+            <strong>{edits.length === 0 ? 'Production' : 'Scenario'}</strong>
+            <span className="changes">{edits.length === 0 ? 'every lever at production’s value' : edits.join(' · ')}</span>
+            {edits.length > 0 && (
+              <>
+                <span className="changes">
+                  → {changedCount} of {outcome.rows.length} rows change rank, seat or power
+                </span>
+                <button onClick={() => setScenario(production)}>Reset to production</button>
+              </>
+            )}
+            {parity && edits.length === 0 && (
+              <span className={`parity ${parity.matching === parity.total ? 'ok' : 'off'}`} style={{ marginLeft: 'auto' }}>
+                {parity.matching === parity.total
+                  ? `✔ reproduces production run #${parity.runId} (${parity.total} rows)`
+                  : `⚠ ${parity.total - parity.matching} of ${parity.total} rows differ from production run #${parity.runId}`}
+              </span>
+            )}
+          </div>
+        </div>
+
         <div className="card">
           <div className="scrubber">
             <div>
@@ -334,74 +339,99 @@ function Simulator({
             <button onClick={() => setAsOfIndex(allDates.length - 1)}>Latest</button>
           </div>
           <div className="hint" style={{ marginTop: 10 }}>
-            Scores use only data up to this date — balances, votes and HighSignal observations
-            after it are ignored.
+            Scored as production would freeze this day: only balances, votes and HighSignal
+            observations up to its end. Opt-outs, auto-delegators, ETH-community members and
+            nominations are those of the imported run.
           </div>
           {twabTruncated !== null && (
             <div className="warn-note">
-              TWAB window is {params.holdings.windowDays}d but only {twabTruncated}d of balance
-              history has been collected — holdings are averaged over {twabTruncated}d. Collect a
-              longer backfill before reading holdings calibration from this.
+              TWAB window is {scenario.params.holdings.windowDays}d but production had only {twabTruncated}d of balances by
+              this date — holdings are averaged over {twabTruncated}d, as production would.
             </div>
           )}
         </div>
 
         <div className="card">
           <div className="stat-row">
-            <div className="stat">
-              <div className="k">Top delegate</div>
-              <div className="v">{rows[0]?.displayName ?? '—'}</div>
-            </div>
-            <div className="stat">
-              <div className="k">Top score</div>
-              <div className="v">{fmtScore(rows[0]?.score ?? null)}</div>
-            </div>
-            <div className="stat">
-              <div className="k">Roster average</div>
-              <div className="v">{fmtScore(avg)}</div>
-            </div>
-            <div className="stat">
-              <div className="k">Proposals in window</div>
-              <div className="v">{rows[0]?.raw.proposalCount ?? 0}</div>
-            </div>
+            <Stat k="Top delegate" v={outcome.rows[0]?.displayName ?? '—'} />
+            <Stat k="Top score" v={fmtScore(outcome.rows[0]?.score ?? null)} />
+            <Stat k="Seats" v={String(seats)} />
+            <Stat k="Pool" v={fmtTokens(outcome.pool)} />
+            <Stat k="Proposals in window" v={String(outcome.rows[0]?.proposalCount ?? 0)} />
           </div>
         </div>
 
-        <DelegationBreakdown result={delegationResult} />
+        {outcome.allocation ? (
+          <DelegationBreakdown allocation={outcome.allocation} baseline={baseline.allocation} />
+        ) : (
+          <div className="card warn-note">✖ {outcome.error}. Production would abort this run — fix the nominations.</div>
+        )}
 
         <Leaderboard
           rows={visibleRows}
-          totalCount={rows.length}
+          totalCount={outcome.rows.length}
           colors={colors}
           selected={selectedRow?.address ?? null}
           onSelect={setSelected}
-          params={params}
-          delegation={delegationResult}
-          assignments={delegation.assignments}
-          onAssign={assignCohort}
+          params={scenario.params}
+          ctx={ctx}
+          onNominate={toggleNomination}
           filter={filter}
           onFilterChange={setFilter}
-          identities={identityByAddress}
         />
 
-        <IdentityCard
-          row={selectedRow}
-          identity={selectedRow ? identityByAddress.get(selectedRow.address.toLowerCase()) : undefined}
-          rosterAddresses={rosterAddresses}
-        />
+        <DelegateCard row={selectedRow} ctx={ctx} candidates={candidates} members={members} />
 
         <div className="chart-grid">
-          <ScoreChart
-            data={scoreData}
-            rows={visibleRows}
-            colors={colors}
-            asOf={asOf}
-            selected={selectedRow?.address ?? null}
-            onSelect={setSelected}
-          />
+          <ScoreChart data={scoreData} rows={chartRows} colors={colors} asOf={asOf} selected={selectedRow?.address ?? null} onSelect={setSelected} />
           <PillarChart data={pillarData} delegate={selectedRow} asOf={asOf} />
         </div>
       </main>
     </div>
   );
+}
+
+function Stat({ k, v }: { k: string; v: string }) {
+  return (
+    <div className="stat">
+      <div className="k">{k}</div>
+      <div className="v">{v}</div>
+    </div>
+  );
+}
+
+/** One phrase per lever group that differs from production. */
+function describeEdits(s: Scenario, p: Scenario): string[] {
+  const edits: string[] = [];
+  if (!paramsEqual(s.params, p.params)) edits.push('scoring params');
+  if (s.delegation.cap !== p.delegation.cap) edits.push(`cap ${s.delegation.cap === null ? 'off' : fmtTokens(s.delegation.cap)}`);
+  if (s.delegation.scoreThreshold !== p.delegation.scoreThreshold) edits.push(`threshold ${s.delegation.scoreThreshold}`);
+  if (!delegationEqual({ ...s.delegation, cap: null, scoreThreshold: 0 }, { ...p.delegation, cap: null, scoreThreshold: 0 })) {
+    edits.push('cohort shares');
+  }
+  if (s.pool !== null) edits.push(`pool ${fmtTokens(s.pool)}`);
+  if (nominationKey(s.nominations) !== nominationKey(p.nominations)) edits.push('nominations');
+  if (s.sources !== null) edits.push('roster sources');
+  return edits;
+}
+
+function near(a: number | null, b: number | null): boolean {
+  if (a === null || b === null) return a === b;
+  return Math.abs(a - b) <= 4 * Number.EPSILON * Math.max(Math.abs(a), Math.abs(b));
+}
+
+function safeGet(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function safeSet(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    /* storage blocked */
+  }
 }

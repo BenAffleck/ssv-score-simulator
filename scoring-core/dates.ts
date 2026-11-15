@@ -35,3 +35,8 @@ export function dateRange(start: string, end: string): string[] {
 export function todayUtc(): string {
   return new Date().toISOString().slice(0, 10);
 }
+
+/** Unix seconds of the close of `date` (UTC): the start of the next day. */
+export function endOfDay(date: string): number {
+  return dateToTs(date) + DAY_SECONDS;
+}

@@ -1,18 +1,19 @@
 /**
- * Persistence for the delegation config (total delegatable, cohort percentages,
- * thresholds, and per-entity cohort assignments), so the analysis survives a
- * reload without re-typing.
- *
- * A small, separate IndexedDB database from the dataset store — the config is a
- * few KB and its own version line avoids coupling the two stores' schema bumps.
- * Like the dataset store, reads degrade to null and writes surface failures.
+ * Persistence for the scenario being edited, so it survives a reload. A small
+ * IndexedDB store of its own; reads degrade to null, and a stored scenario is
+ * re-validated with the same parsers as an imported config file.
  */
-import type { DelegationConfig } from '../../scoring-core/index.js';
+import {
+  parseDelegation,
+  parseNominations,
+  parseParams,
+  type Scenario,
+} from '../../scoring-core/index.js';
 
 const DB_NAME = 'delegate-score-sim-config';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE = 'config';
-const KEY = 'delegation';
+const KEY = 'scenario';
 
 function open(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -36,18 +37,28 @@ function tx<T>(mode: IDBTransactionMode, run: (store: IDBObjectStore) => IDBRequ
   );
 }
 
-export async function loadDelegationConfig(): Promise<DelegationConfig | null> {
+/** The stored scenario for the dataset `origin`, or null when none is stored or it no longer parses. */
+export async function loadScenario(origin: string): Promise<Scenario | null> {
   try {
-    return (await tx<DelegationConfig | undefined>('readonly', (s) => s.get(KEY))) ?? null;
+    const stored = await tx<{ origin: string; scenario: Scenario } | undefined>('readonly', (s) => s.get(KEY));
+    if (!stored || stored.origin !== origin) return null;
+    const s = stored.scenario;
+    return {
+      params: parseParams(s.params),
+      delegation: parseDelegation(s.delegation),
+      pool: typeof s.pool === 'number' && s.pool >= 0 ? s.pool : null,
+      nominations: parseNominations(s.nominations),
+      sources: Array.isArray(s.sources) ? s.sources.filter((x) => typeof x === 'string') : null,
+    };
   } catch {
     return null;
   }
 }
 
-export async function saveDelegationConfig(config: DelegationConfig): Promise<void> {
+export async function saveScenario(origin: string, scenario: Scenario): Promise<void> {
   try {
-    await tx('readwrite', (s) => s.put(config, KEY));
+    await tx('readwrite', (s) => s.put({ origin, scenario }, KEY));
   } catch {
-    /* storage blocked — the session still works, config just won't persist */
+    /* storage blocked — the session still works, the scenario just won't persist */
   }
 }
