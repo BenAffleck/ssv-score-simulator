@@ -267,6 +267,7 @@ function Simulator({
           {sidebarCollapsed ? '»' : '«'}
         </button>
         <h1>Delegate Score Simulator</h1>
+        <ThemeToggle />
         <span className="sub">{dataset.space}</span>
         <span className="pill">{dataset.roster.length} candidates</span>
         <span className="pill">{dataset.proposals.length} proposals</span>
@@ -279,7 +280,6 @@ function Simulator({
           imported {dataset.generatedAt.slice(0, 10)}
         </span>
         <DatasetBadge dataset={dataset} source={source} importFile={importFile} onReset={onReset} />
-        <ThemeToggle />
       </header>
 
       {!sidebarCollapsed && (
